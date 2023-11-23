@@ -8,6 +8,7 @@ mod tokenizer;
 #[derive(Debug)]
 struct Context {
     variables: HashMap<String, VariableValue>,
+    functions: HashMap<String, (Vec<String>, Expression)>,
 }
 
 #[derive(Debug)]
@@ -34,6 +35,7 @@ fn main() {
                     Ok(sta) => {
                         let mut context = Context {
                             variables: HashMap::new(),
+                            functions: HashMap::new(),
                         };
                         if let Err(e) = execute(&mut context, sta) {
                             error!("Error {:?}", e);
@@ -59,13 +61,26 @@ fn execute(
     for statement in statements {
         match statement {
             Statement::Empty => (),
-            Statement::VariableAssignment(s, expr) => {
+            Statement::VariableDefinition(s, expr) => {
                 let val = evaluate_expr(context, expr)?;
+                if context.variables.contains_key(&s) {
+                    return Err(RuntimeError(format!("Variable '{}' already exists", s)))
+                }
                 context.variables.insert(s, val);
             }
             Statement::ReturnStatement(expr) => return evaluate_expr(context, expr),
             Statement::ExpressionStatement(expr) => {
                 evaluate_expr(context, expr)?;
+            }
+            Statement::FunctionDefinition(s, params, expr) => {
+                if context.functions.contains_key(&s) {
+                    return Err(RuntimeError(format!("Function '{}' already exists", s)))
+                }
+                context.functions.insert(s, (params, expr));
+            }
+            Statement::VariableAssignment(s, expr) => {
+                let val = evaluate_expr(context, expr)?;
+                set_var(context, &s, val)?;
             }
         }
     }
@@ -79,6 +94,7 @@ fn evaluate_expr(context: &mut Context, expr: Expression) -> Result<VariableValu
         Expression::Block(statements) => {
             let mut inner_context = Context {
                 variables: context.variables.clone(),
+                functions: context.functions.clone(),
             };
             execute(&mut inner_context, statements)
         }
@@ -87,24 +103,55 @@ fn evaluate_expr(context: &mut Context, expr: Expression) -> Result<VariableValu
             let rval = evaluate_expr(context, *r)?;
             evaluate_op(lval, rval, op)
         }
-        Expression::Reference(s) => context
-            .variables
-            .get(&s)
-            .copied()
-            .ok_or(RuntimeError(format!("Variable {} does not exist", s))),
-        Expression::FunctionCall(s, params) => {
+        Expression::Reference(var_name) => get_var(context, &var_name),
+        Expression::FunctionCall(function_name, params) => {
             let values: Vec<VariableValue> = params
                 .into_iter()
                 .map(|p| evaluate_expr(context, p))
                 .collect::<Result<Vec<VariableValue>, RuntimeError>>()?;
-            if s == "print" {
+            if function_name == "print" {
                 println!("{:?}", values);
                 Ok(VariableValue::Void)
+            } else if let Some((args, expr)) = context.functions.get(&function_name) {
+                let mut inner_context = Context {
+                    variables: HashMap::new(),
+                    functions: HashMap::new(),
+                };
+                for i in 0..values.len() {
+                    inner_context
+                        .variables
+                        .insert(args[i].to_owned(), values[i]);
+                }
+                evaluate_expr(&mut inner_context, expr.clone())
             } else {
-                Err(RuntimeError("Not implemented".to_owned()))
+                Err(RuntimeError(format!(
+                    "Function '{}' does not exist",
+                    function_name
+                )))
             }
         }
     }
+}
+
+fn get_var(context: &Context, var: &String) -> Result<VariableValue, RuntimeError> {
+    context
+        .variables
+        .get(var)
+        .copied()
+        .ok_or(RuntimeError(format!("Variable '{}' does not exist", var)))
+}
+
+fn set_var(
+    context: &mut Context,
+    var: &String,
+    val: VariableValue,
+) -> Result<VariableValue, RuntimeError> {
+    let v = context
+        .variables
+        .get_mut(var)
+        .ok_or(RuntimeError(format!("Variable '{}' does not exist", var)))?;
+    *v = val;
+    Ok(val)
 }
 
 fn evaluate_op(
@@ -119,9 +166,6 @@ fn evaluate_op(
                 Operator::Add => Ok(VariableValue::Number(na + nb)),
                 Operator::Subtract => Ok(VariableValue::Number(na - nb)),
                 Operator::Multiply => Ok(VariableValue::Number(na * nb)),
-                Operator::Assign => Err(RuntimeError(format!(
-                    "Invalid 'Assign' Operator for Numbers"
-                ))),
             }
         } else {
             Err(RuntimeError(format!("Not implemented")))
