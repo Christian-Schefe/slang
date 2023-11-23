@@ -64,20 +64,23 @@ fn execute(
                 context.variables.insert(s, val);
             }
             Statement::ReturnStatement(expr) => return evaluate_expr(context, expr),
+            Statement::ExpressionStatement(expr) => {
+                evaluate_expr(context, expr)?;
+            }
         }
     }
     Ok(VariableValue::Void)
 }
 
-fn evaluate_expr(context: &Context, expr: Expression) -> Result<VariableValue, RuntimeError> {
+fn evaluate_expr(context: &mut Context, expr: Expression) -> Result<VariableValue, RuntimeError> {
     debug!("Evaluate Expr {:?}", expr);
     match expr {
         Expression::Value(x) => Ok(x),
         Expression::Block(statements) => {
-            let mut context = Context {
-                variables: HashMap::new(),
+            let mut inner_context = Context {
+                variables: context.variables.clone(),
             };
-            execute(&mut context, statements)
+            execute(&mut inner_context, statements)
         }
         Expression::ComputedValue(l, r, op) => {
             let lval = evaluate_expr(context, *l)?;
@@ -87,8 +90,20 @@ fn evaluate_expr(context: &Context, expr: Expression) -> Result<VariableValue, R
         Expression::Reference(s) => context
             .variables
             .get(&s)
-            .ok_or(RuntimeError(format!("Variable {} does not exist", s)))
-            .copied(),
+            .copied()
+            .ok_or(RuntimeError(format!("Variable {} does not exist", s))),
+        Expression::FunctionCall(s, params) => {
+            let values: Vec<VariableValue> = params
+                .into_iter()
+                .map(|p| evaluate_expr(context, p))
+                .collect::<Result<Vec<VariableValue>, RuntimeError>>()?;
+            if s == "print" {
+                println!("{:?}", values);
+                Ok(VariableValue::Void)
+            } else {
+                Err(RuntimeError("Not implemented".to_owned()))
+            }
+        }
     }
 }
 

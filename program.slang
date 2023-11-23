@@ -1,10 +1,18 @@
 let x = 5;
 let y = 7;
-let ascari = 3;
-let adg = x + y;
-let para = adg - ascari + x * 3 - 18 * y * 2;
-let para2 = 12 - 3 + 5 * 3 - 18 * 7 * 2;
-let xm = { 
-    let a = true; return a;
+print(1);
+{
+    print(2);
+    let x = x + y;
+    print(3);
+    {
+        print(4);
+        let x = x + y;
+        print(5);
+        {
+            print(6);
+            let x = x + y;
+            print(7, x, x * y, {let a = x - y; return a;});
+        };
+    };
 };
-let let = 4;

@@ -9,7 +9,10 @@ pub enum Token {
     Value(VariableValue),
     OpeningBrace,
     ClosingBrace,
+    OpeningParethesis,
+    ClosingParethesis,
     Semicolon,
+    Comma,
     Dot,
     Operator(Operator),
 }
@@ -52,12 +55,14 @@ pub enum Expression {
     Reference(String),
     ComputedValue(Box<Expression>, Box<Expression>, Operator),
     Block(Vec<Statement>),
+    FunctionCall(String, Vec<Expression>),
 }
 
 #[derive(Debug)]
 pub enum Statement {
     VariableAssignment(String, Expression),
     ReturnStatement(Expression),
+    ExpressionStatement(Expression),
     Empty,
 }
 
@@ -130,8 +135,11 @@ fn map_char_token(c: char, token: CharToken) -> Result<Token, SyntaxError> {
         '-' => Ok(Token::Operator(Operator::Subtract)),
         '*' => Ok(Token::Operator(Operator::Multiply)),
         ';' => Ok(Token::Semicolon),
+        ',' => Ok(Token::Comma),
         '{' => Ok(Token::OpeningBrace),
         '}' => Ok(Token::ClosingBrace),
+        '(' => Ok(Token::OpeningParethesis),
+        ')' => Ok(Token::ClosingParethesis),
         '.' => Ok(Token::Dot),
         chr => {
             if chr.is_ascii_alphabetic() {
@@ -206,12 +214,15 @@ fn get_statement(t: Vec<Token>) -> Result<Statement, SyntaxError> {
                 return Ok(Statement::ReturnStatement(expr));
             }
         }
+        if let Some(expr) = try_get_expr(t.clone()) {
+            return Ok(Statement::ExpressionStatement(expr));
+        }
         Err(SyntaxError(format!("Invalid Statement: {:?}", t)))
     }
 }
 
 fn try_get_expr(t: Vec<Token>) -> Option<Expression> {
-    debug!("Get Expr: {:?}", t);
+    // debug!("Get Expr: {:?}", t);
     if t.len() == 1 {
         if let Some(Token::Value(val)) = t.get(0) {
             Some(Expression::Value(*val))
@@ -221,6 +232,8 @@ fn try_get_expr(t: Vec<Token>) -> Option<Expression> {
             None
         }
     } else if let Some(expr) = try_get_block_expr(t.clone()) {
+        Some(expr)
+    } else if let Some(expr) = try_get_function_expr(t.clone()) {
         Some(expr)
     } else {
         let ops: Vec<(usize, Operator)> = t
@@ -270,6 +283,39 @@ fn try_get_block_expr(t: Vec<Token>) -> Option<Expression> {
     {
         let statements = get_statements(t[1..t.len() - 1].to_vec()).ok();
         return statements.and_then(|s| Some(Expression::Block(s)));
+    }
+
+    None
+}
+
+fn try_get_function_expr(t: Vec<Token>) -> Option<Expression> {
+    if t.len() >= 3
+        && matches!(t[1], Token::OpeningParethesis)
+        && matches!(t[t.len() - 1], Token::ClosingParethesis)
+    {
+        if let Token::Identifier(s) = &t[0] {
+            let mut params = Vec::new();
+            let mut last_comma = 2;
+            for i in 2..t.len() - 1 {
+                match t[i] {
+                    Token::Comma => {
+                        let expr = try_get_expr(t[last_comma..i].to_vec());
+                        if expr.is_none() {
+                            return None;
+                        }
+                        params.push(expr.unwrap());
+                        last_comma = i + 1;
+                    }
+                    _ => (),
+                }
+            }
+            let last_expr = try_get_expr(t[last_comma..t.len() - 1].to_vec());
+            if last_expr.is_none() {
+                return None;
+            }
+            params.push(last_expr.unwrap());
+            return Some(Expression::FunctionCall(s.clone(), params));
+        }
     }
 
     None
