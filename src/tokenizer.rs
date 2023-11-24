@@ -23,7 +23,11 @@ pub fn tokenize(program: &str) -> Result<Vec<Token>, SyntaxError> {
 
     let mapped_tokens = map_tokens(filtered_tokens)?;
     info!("mapped: {:?}", mapped_tokens);
-    Ok(mapped_tokens)
+
+    let merged_tokens = token_merger(mapped_tokens);
+    info!("merged: {:?}", merged_tokens);
+
+    Ok(merged_tokens)
 }
 
 fn char_reducer(mut acc: Vec<CharToken>, cur: CharToken) -> Vec<CharToken> {
@@ -105,6 +109,8 @@ fn map_char_token(c: char, token: CharToken) -> Result<Token, SyntaxError> {
         '+' => Ok(Token::Operator(Operator::Add)),
         '-' => Ok(Token::Operator(Operator::Subtract)),
         '*' => Ok(Token::Operator(Operator::Multiply)),
+        '<' => Ok(Token::Operator(Operator::LessThan)),
+        '>' => Ok(Token::Operator(Operator::GreaterThan)),
         ';' => Ok(Token::Semicolon),
         ',' => Ok(Token::Comma),
         '{' => Ok(Token::OpeningBrace),
@@ -142,6 +148,40 @@ fn map_string_token(s: String) -> Result<Token, SyntaxError> {
             }
         }
     }
+}
+
+fn token_merger(tokens: Vec<Token>) -> Vec<Token> {
+    let mut new_tokens = Vec::new();
+    for i in 0..tokens.len() {
+        let (prev, cur) = (new_tokens.last(), tokens.get(i));
+        if let Some(cur_tkn) = cur {
+            match prev {
+                Some(Token::Assign) => match cur_tkn {
+                    Token::Assign => {
+                        new_tokens.pop();
+                        new_tokens.push(Token::Operator(Operator::Equal));
+                    }
+                    _ => new_tokens.push(cur_tkn.clone()),
+                },
+                Some(Token::Operator(Operator::LessThan)) => match cur_tkn {
+                    Token::Assign => {
+                        new_tokens.pop();
+                        new_tokens.push(Token::Operator(Operator::LessThanOrEqual));
+                    }
+                    _ => new_tokens.push(cur_tkn.clone()),
+                },
+                Some(Token::Operator(Operator::GreaterThan)) => match cur_tkn {
+                    Token::Assign => {
+                        new_tokens.pop();
+                        new_tokens.push(Token::Operator(Operator::GreaterThanOrEqual));
+                    }
+                    _ => new_tokens.push(cur_tkn.clone()),
+                },
+                _ => new_tokens.push(cur_tkn.clone()),
+            }
+        }
+    }
+    new_tokens
 }
 
 pub fn get_statements(tokens: Vec<Token>) -> Result<Vec<Statement>, SyntaxError> {
@@ -295,8 +335,9 @@ fn try_get_while_loop(t: Vec<Token>) -> Option<Statement> {
 }
 
 fn try_get_expr(t: Vec<Token>) -> Option<Expression> {
-    // debug!("Get Expr: {:?}", t);
-    if t.len() == 1 {
+    let r = if t.len() < 1 {
+        None
+    } else if t.len() == 1 {
         if let Some(Token::Value(val)) = t.get(0) {
             Some(Expression::Value(val.clone()))
         } else if let Some(Token::Identifier(val)) = t.get(0) {
@@ -316,7 +357,9 @@ fn try_get_expr(t: Vec<Token>) -> Option<Expression> {
         Some(expr)
     } else {
         None
-    }
+    };
+    info!("Get Expr: {:?} -> {:?}", t, r);
+    r
 }
 
 fn try_get_parenthesized_expr(t: Vec<Token>) -> Option<Expression> {
@@ -398,11 +441,11 @@ fn try_get_if_else_expr(t: Vec<Token>) -> Option<Expression> {
 }
 
 fn try_get_op_expr(t: Vec<Token>) -> Option<Expression> {
-    if matches!(t[0], Token::OpeningParethesis)
-        && matches!(t[t.len() - 1], Token::ClosingParethesis)
-    {
-        return try_get_op_expr(t[1..t.len() - 1].to_vec());
-    }
+    // if matches!(t[0], Token::OpeningParethesis)
+    //     && matches!(t[t.len() - 1], Token::ClosingParethesis)
+    // {
+    //     return try_get_op_expr(t[1..t.len() - 1].to_vec());
+    // }
     let mut min_precedence = None;
     let mut op_pos = None;
     let mut indent_level = 0;
@@ -431,7 +474,7 @@ fn try_get_op_expr(t: Vec<Token>) -> Option<Expression> {
     if let Some((i, op)) = op_pos {
         if let Some(left_expr) = try_get_expr(t[..i].to_vec()) {
             if let Some(right_expr) = try_get_expr(t[(i + 1)..].to_vec()) {
-                debug!("Get ops: {:?} {:?} {:?}", left_expr, op, right_expr);
+                info!("Get ops: {:?} {:?} {:?}", left_expr, op, right_expr);
                 return Some(Expression::ComputedValue(
                     Box::new(left_expr),
                     Box::new(right_expr),
@@ -491,7 +534,11 @@ fn try_get_function_expr(t: Vec<Token>) -> Option<Expression> {
             if last_expr.is_some() {
                 params.push(last_expr.unwrap());
             }
-            return Some(Expression::FunctionCall(s.clone(), params));
+            if params.len() == 0 && t.len() > 3 {
+                return None;
+            } else {
+                return Some(Expression::FunctionCall(s.clone(), params));
+            }
         }
     }
 

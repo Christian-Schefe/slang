@@ -43,6 +43,11 @@ impl Display for Token {
             Token::Operator(Operator::Add) => "+".to_string(),
             Token::Operator(Operator::Subtract) => "-".to_string(),
             Token::Operator(Operator::Multiply) => "*".to_string(),
+            Token::Operator(Operator::Equal) => "==".to_string(),
+            Token::Operator(Operator::LessThan) => "<".to_string(),
+            Token::Operator(Operator::LessThanOrEqual) => "<=".to_string(),
+            Token::Operator(Operator::GreaterThan) => ">".to_string(),
+            Token::Operator(Operator::GreaterThanOrEqual) => ">=".to_string(),
         };
         f.write_str(&stri)
     }
@@ -63,14 +68,24 @@ pub enum Operator {
     Add,
     Subtract,
     Multiply,
+    Equal,
+    LessThan,
+    GreaterThan,
+    LessThanOrEqual,
+    GreaterThanOrEqual,
 }
 
 impl Operator {
     pub fn precedence(&self) -> u32 {
         match self {
-            Operator::Multiply => 1,
-            Operator::Add => 0,
-            Operator::Subtract => 0,
+            Operator::Multiply => 2,
+            Operator::Add => 1,
+            Operator::Subtract => 1,
+            Operator::LessThan => 0,
+            Operator::GreaterThan => 0,
+            Operator::Equal => 0,
+            Operator::LessThanOrEqual => 0,
+            Operator::GreaterThanOrEqual => 0,
         }
     }
 }
@@ -165,5 +180,103 @@ impl Display for VariableValue {
             VariableValue::Function(args, expr) => format!("{:?} -> {:?}", args, expr),
         };
         f.write_str(&stri)
+    }
+}
+
+impl VariableValue {
+    pub fn add(a: VariableValue, b: VariableValue) -> Result<VariableValue, RuntimeError> {
+        match (a, b) {
+            (Self::Number(na), Self::Number(nb)) => Ok(VariableValue::Number(na + nb)),
+            (x, y) => Err(RuntimeError(format!(
+                "Addition between {} and {} us not implemented!",
+                x, y
+            ))),
+        }
+    }
+
+    pub fn subtract(a: VariableValue, b: VariableValue) -> Result<VariableValue, RuntimeError> {
+        match (a, b) {
+            (Self::Number(na), Self::Number(nb)) => Ok(VariableValue::Number(na - nb)),
+            (x, y) => Err(RuntimeError(format!(
+                "Subtraction between {} and {} us not implemented!",
+                x, y
+            ))),
+        }
+    }
+
+    pub fn multiply(a: VariableValue, b: VariableValue) -> Result<VariableValue, RuntimeError> {
+        match (a, b) {
+            (Self::Number(na), Self::Number(nb)) => Ok(VariableValue::Number(na * nb)),
+            (x, y) => Err(RuntimeError(format!(
+                "Multiplication between {} and {} us not implemented!",
+                x, y
+            ))),
+        }
+    }
+
+    pub fn equals(a: VariableValue, b: VariableValue) -> Result<VariableValue, RuntimeError> {
+        match (a, b) {
+            (Self::Number(na), Self::Number(nb)) => Ok(VariableValue::Boolean(na == nb)),
+            (Self::Boolean(na), Self::Boolean(nb)) => Ok(VariableValue::Boolean(na == nb)),
+            (Self::String(na), Self::String(nb)) => Ok(VariableValue::Boolean(na == nb)),
+            (x, y) => Err(RuntimeError(format!(
+                "Equal between {} and {} us not implemented!",
+                x, y
+            ))),
+        }
+    }
+
+    pub fn less_than(a: VariableValue, b: VariableValue) -> Result<VariableValue, RuntimeError> {
+        match (a, b) {
+            (Self::Number(na), Self::Number(nb)) => Ok(VariableValue::Boolean(na < nb)),
+            (Self::Boolean(na), Self::Boolean(nb)) => Ok(VariableValue::Boolean(na < nb)),
+            (Self::String(na), Self::String(nb)) => Ok(VariableValue::Boolean(na < nb)),
+            (x, y) => Err(RuntimeError(format!(
+                "Less Than between {} and {} us not implemented!",
+                x, y
+            ))),
+        }
+    }
+
+    pub fn greater_than(a: VariableValue, b: VariableValue) -> Result<VariableValue, RuntimeError> {
+        match (a, b) {
+            (Self::Number(na), Self::Number(nb)) => Ok(VariableValue::Boolean(na > nb)),
+            (Self::Boolean(na), Self::Boolean(nb)) => Ok(VariableValue::Boolean(na > nb)),
+            (Self::String(na), Self::String(nb)) => Ok(VariableValue::Boolean(na > nb)),
+            (x, y) => Err(RuntimeError(format!(
+                "Greater Than between {} and {} us not implemented!",
+                x, y
+            ))),
+        }
+    }
+
+    pub fn less_than_or_equal(
+        a: VariableValue,
+        b: VariableValue,
+    ) -> Result<VariableValue, RuntimeError> {
+        match (a, b) {
+            (Self::Number(na), Self::Number(nb)) => Ok(VariableValue::Boolean(na <= nb)),
+            (Self::Boolean(na), Self::Boolean(nb)) => Ok(VariableValue::Boolean(na <= nb)),
+            (Self::String(na), Self::String(nb)) => Ok(VariableValue::Boolean(na <= nb)),
+            (x, y) => Err(RuntimeError(format!(
+                "Less Than Or Equal between {} and {} us not implemented!",
+                x, y
+            ))),
+        }
+    }
+
+    pub fn greater_than_or_equal(
+        a: VariableValue,
+        b: VariableValue,
+    ) -> Result<VariableValue, RuntimeError> {
+        match (a, b) {
+            (Self::Number(na), Self::Number(nb)) => Ok(VariableValue::Boolean(na >= nb)),
+            (Self::Boolean(na), Self::Boolean(nb)) => Ok(VariableValue::Boolean(na >= nb)),
+            (Self::String(na), Self::String(nb)) => Ok(VariableValue::Boolean(na >= nb)),
+            (x, y) => Err(RuntimeError(format!(
+                "Greater Than Or Equal between {} and {} us not implemented!",
+                x, y
+            ))),
+        }
     }
 }

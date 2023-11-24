@@ -1,2 +1,13 @@
-let x = if (true) (if (false) 5 else 7) else 6;
-print(x);
+let x = 0;
+let y = 1;
+let z = 0;
+let count = 100;
+
+while (count > 0) {
+    z = x + y;
+    x = y;
+    y = z;
+    print(x);
+
+    count = count - 1;
+};

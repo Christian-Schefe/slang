@@ -125,18 +125,14 @@ fn evaluate_op(
     b: VariableValue,
     op: Operator,
 ) -> Result<VariableValue, RuntimeError> {
-    debug!("Evaluate Operator {:?}", op);
-    if let VariableValue::Number(na) = a {
-        if let VariableValue::Number(nb) = b {
-            match op {
-                Operator::Add => Ok(VariableValue::Number(na + nb)),
-                Operator::Subtract => Ok(VariableValue::Number(na - nb)),
-                Operator::Multiply => Ok(VariableValue::Number(na * nb)),
-            }
-        } else {
-            Err(RuntimeError(format!("Not implemented")))
-        }
-    } else {
-        Err(RuntimeError(format!("Not implemented")))
+    match op {
+        Operator::Add => VariableValue::add(a, b),
+        Operator::Subtract => VariableValue::subtract(a, b),
+        Operator::Multiply => VariableValue::multiply(a, b),
+        Operator::Equal => VariableValue::equals(a, b),
+        Operator::LessThan => VariableValue::less_than(a, b),
+        Operator::LessThanOrEqual => VariableValue::less_than_or_equal(a, b),
+        Operator::GreaterThan => VariableValue::greater_than(a, b),
+        Operator::GreaterThanOrEqual => VariableValue::greater_than_or_equal(a, b),
     }
 }
