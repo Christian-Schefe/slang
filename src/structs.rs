@@ -15,6 +15,7 @@ pub enum Token {
     Semicolon,
     Assign,
     Comma,
+    Quote,
     Dot,
     Operator(Operator),
 }
@@ -24,6 +25,7 @@ impl Display for Token {
         let stri = match self {
             Token::Assign => "=".to_string(),
             Token::Comma => ",".to_string(),
+            Token::Quote => "\"".to_string(),
             Token::OpeningBrace => "{".to_string(),
             Token::ClosingBrace => "}".to_string(),
             Token::OpeningParethesis => "(".to_string(),
@@ -36,10 +38,12 @@ impl Display for Token {
             Token::Value(VariableValue::Void) => "void".to_string(),
             Token::Value(VariableValue::Number(n)) => n.to_string(),
             Token::Value(VariableValue::Boolean(b)) => b.to_string(),
+            Token::Value(VariableValue::String(s)) => s.to_string(),
             Token::Semicolon => ";".to_string(),
             Token::Dot => ".".to_string(),
             Token::Operator(Operator::Add) => "+".to_string(),
             Token::Operator(Operator::Subtract) => "-".to_string(),
+            Token::Operator(Operator::Multiply) => "*".to_string(),
             Token::Operator(Operator::Multiply) => "*".to_string(),
         };
         f.write_str(&stri)
@@ -74,7 +78,8 @@ impl Operator {
 #[derive(Debug, Clone)]
 pub enum CharToken {
     Char(char),
-    String(String),
+    Identifier(String),
+    String(String, bool),
 }
 
 #[derive(Debug, Clone)]
@@ -108,9 +113,10 @@ pub struct RuntimeError(pub String);
 #[derive(Debug)]
 pub struct SyntaxError(pub String);
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum VariableValue {
     Number(i32),
     Boolean(bool),
+    String(String),
     Void,
 }

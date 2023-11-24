@@ -27,26 +27,48 @@ pub fn tokenize(program: &str) -> Result<Vec<Token>, SyntaxError> {
 
 fn char_reducer(mut acc: Vec<CharToken>, cur: CharToken) -> Vec<CharToken> {
     if let Some(last_token) = acc.pop() {
-        if let CharToken::Char(c) = cur {
-            if c.is_ascii_alphanumeric() {
-                if let CharToken::Char(lc) = last_token {
+        match cur {
+            CharToken::Char(c) if c.is_ascii_alphanumeric() || c == '_' => match last_token {
+                CharToken::Char(lc) => {
                     if lc.is_ascii_alphanumeric() {
                         let mut str = String::new();
                         str.push(lc);
                         str.push(c);
-                        acc.push(CharToken::String(str));
+                        acc.push(CharToken::Identifier(str));
                     } else {
                         acc.push(CharToken::Char(lc));
                         acc.push(CharToken::Char(c));
                     }
-                } else if let CharToken::String(mut lc) = last_token {
-                    lc.push(c);
-                    acc.push(CharToken::String(lc));
                 }
-            } else {
+                CharToken::Identifier(mut lc) => {
+                    lc.push(c);
+                    acc.push(CharToken::Identifier(lc));
+                }
+                CharToken::String(mut s, is_closed) => {
+                    if is_closed {
+                        acc.push(CharToken::Char(c));
+                    } else {
+                        s.push(c);
+                        acc.push(CharToken::String(s, false));
+                    }
+                }
+            },
+            CharToken::Char(c) if c == '"' => {
+                if let CharToken::String(s, is_closed) = last_token {
+                    acc.push(CharToken::String(s, true));
+                    if is_closed {
+                        acc.push(CharToken::String(String::new(), false));
+                    }
+                } else {
+                    acc.push(last_token);
+                    acc.push(CharToken::String(String::new(), false));
+                }
+            }
+            CharToken::Char(c) => {
                 acc.push(last_token);
                 acc.push(CharToken::Char(c));
             }
+            _ => error!("Invalid Char in Reducer"),
         }
     } else {
         acc.push(cur);
@@ -59,7 +81,8 @@ fn map_tokens(tokens: Vec<CharToken>) -> Result<Vec<Token>, SyntaxError> {
         .into_iter()
         .map(|x| match x {
             CharToken::Char(c) => map_char_token(c, x),
-            CharToken::String(s) => map_string_token(s),
+            CharToken::Identifier(s) => map_string_token(s),
+            CharToken::String(s, _) => Ok(Token::Value(VariableValue::String(s))),
         })
         .collect()
 }
@@ -77,6 +100,7 @@ fn map_char_token(c: char, token: CharToken) -> Result<Token, SyntaxError> {
         '(' => Ok(Token::OpeningParethesis),
         ')' => Ok(Token::ClosingParethesis),
         '.' => Ok(Token::Dot),
+        '"' => Ok(Token::Quote),
         chr => {
             if chr.is_ascii_alphabetic() {
                 Ok(Token::Identifier(chr.to_string()))
@@ -209,7 +233,7 @@ fn try_get_expr(t: Vec<Token>) -> Option<Expression> {
     // debug!("Get Expr: {:?}", t);
     if t.len() == 1 {
         if let Some(Token::Value(val)) = t.get(0) {
-            Some(Expression::Value(*val))
+            Some(Expression::Value(val.clone()))
         } else if let Some(Token::Identifier(val)) = t.get(0) {
             Some(Expression::Reference(val.clone()))
         } else {

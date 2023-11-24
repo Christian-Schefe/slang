@@ -103,7 +103,7 @@ fn evaluate_expr(context: &mut Context, expr: Expression) -> Result<VariableValu
                 for i in 0..values.len() {
                     inner_context
                         .variables
-                        .insert(args[i].to_owned(), values[i]);
+                        .insert(args[i].to_owned(), values[i].clone());
                 }
                 evaluate_expr(&mut inner_context, expr.clone())
             } else {
@@ -120,7 +120,7 @@ fn get_var(context: &Context, var: &String) -> Result<VariableValue, RuntimeErro
     context
         .variables
         .get(var)
-        .copied()
+        .cloned()
         .ok_or(RuntimeError(format!("Variable '{}' does not exist", var)))
 }
 
@@ -128,13 +128,13 @@ fn set_var(
     context: &mut Context,
     var: &String,
     val: VariableValue,
-) -> Result<VariableValue, RuntimeError> {
+) -> Result<(), RuntimeError> {
     let v = context
         .variables
         .get_mut(var)
         .ok_or(RuntimeError(format!("Variable '{}' does not exist", var)))?;
     *v = val;
-    Ok(val)
+    Ok(())
 }
 
 fn evaluate_op(
