@@ -1,72 +1,6 @@
 use log::{debug, info};
 
-use crate::{SyntaxError, VariableValue};
-
-#[derive(Debug, Clone)]
-pub enum Token {
-    Keyword(Keyword),
-    Identifier(String),
-    Value(VariableValue),
-    OpeningBrace,
-    ClosingBrace,
-    OpeningParethesis,
-    ClosingParethesis,
-    Semicolon,
-    Assign,
-    Comma,
-    Dot,
-    Operator(Operator),
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum Keyword {
-    Let,
-    While,
-    Return,
-    Fn,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum Operator {
-    Add,
-    Subtract,
-    Multiply,
-}
-
-impl Operator {
-    fn precedence(&self) -> u32 {
-        match self {
-            Operator::Multiply => 1,
-            Operator::Add => 0,
-            Operator::Subtract => 0,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum CharToken {
-    Char(char),
-    String(String),
-}
-
-#[derive(Debug, Clone)]
-pub enum Expression {
-    Value(VariableValue),
-    Reference(String),
-    ComputedValue(Box<Expression>, Box<Expression>, Operator),
-    Block(Vec<Statement>),
-    FunctionCall(String, Vec<Expression>),
-}
-
-#[derive(Debug, Clone)]
-pub enum Statement {
-    VariableDefinition(String, Expression),
-    VariableAssignment(String, Expression),
-    FunctionDefinition(String, Vec<String>, Expression),
-    ReturnStatement(Expression),
-    ExpressionStatement(Expression),
-    Empty,
-}
+use crate::*;
 
 pub fn tokenize(program: &str) -> Result<Vec<Token>, SyntaxError> {
     let chars = program.chars().map(|c| CharToken::Char(c));
@@ -285,45 +219,58 @@ fn try_get_expr(t: Vec<Token>) -> Option<Expression> {
         Some(expr)
     } else if let Some(expr) = try_get_function_expr(t.clone()) {
         Some(expr)
+    } else if let Some(expr) = try_get_op_expr(t.clone()) {
+        Some(expr)
     } else {
-        let ops: Vec<(usize, Operator)> = t
-            .iter()
-            .cloned()
-            .enumerate()
-            .filter_map(|(i, x)| {
-                if let Token::Operator(op) = x {
-                    Some((i, op))
-                } else {
-                    None
+        None
+    }
+}
+
+fn try_get_op_expr(t: Vec<Token>) -> Option<Expression> {
+    if matches!(t[0], Token::OpeningParethesis)
+        && matches!(t[t.len() - 1], Token::ClosingParethesis)
+    {
+        return try_get_op_expr(t[1..t.len() - 1].to_vec());
+    }
+    let mut min_precedence = None;
+    let mut op_pos = None;
+    let mut indent_level = 0;
+
+    for i in 0..t.len() {
+        match t[i] {
+            Token::OpeningBrace => indent_level += 1,
+            Token::ClosingBrace => indent_level -= 1,
+            Token::OpeningParethesis => indent_level += 1,
+            Token::ClosingParethesis => indent_level -= 1,
+            Token::Operator(op) => {
+                let precedence = op.precedence();
+                if indent_level == 0 && !min_precedence.is_some_and(|min_val| min_val < precedence)
+                {
+                    min_precedence = Some(precedence);
+                    op_pos = Some((i, op));
                 }
-            })
-            .collect();
-        let min_prec = ops.iter().map(|(_, op)| op.precedence()).min();
-
-        if min_prec.is_none() {
-            return None;
-        }
-
-        let (i, op) = ops
-            .iter()
-            .rev()
-            .find(|(_, op)| op.precedence() == min_prec.unwrap())
-            .unwrap();
-
-        if let Some(left_expr) = try_get_expr(t[..*i].to_vec()) {
-            if let Some(right_expr) = try_get_expr(t[(*i + 1)..].to_vec()) {
-                Some(Expression::ComputedValue(
-                    Box::new(left_expr),
-                    Box::new(right_expr),
-                    *op,
-                ))
-            } else {
-                None
             }
-        } else {
-            None
+            _ => (),
         }
     }
+
+    if indent_level != 0 {
+        return None;
+    }
+    if let Some((i, op)) = op_pos {
+        if let Some(left_expr) = try_get_expr(t[..i].to_vec()) {
+            if let Some(right_expr) = try_get_expr(t[(i + 1)..].to_vec()) {
+                debug!("Get ops: {:?} {:?} {:?}", left_expr, op, right_expr);
+                return Some(Expression::ComputedValue(
+                    Box::new(left_expr),
+                    Box::new(right_expr),
+                    op,
+                ));
+            }
+        }
+    }
+
+    None
 }
 
 fn try_get_block_expr(t: Vec<Token>) -> Option<Expression> {

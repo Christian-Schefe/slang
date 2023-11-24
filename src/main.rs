@@ -1,28 +1,11 @@
 use std::{collections::HashMap, fs};
 
 use log::{debug, error, info};
+use structs::*;
 use tokenizer::*;
 
+mod structs;
 mod tokenizer;
-
-#[derive(Debug)]
-struct Context {
-    variables: HashMap<String, VariableValue>,
-    functions: HashMap<String, (Vec<String>, Expression)>,
-}
-
-#[derive(Debug)]
-pub struct RuntimeError(String);
-
-#[derive(Debug)]
-pub struct SyntaxError(String);
-
-#[derive(Debug, Clone, Copy)]
-pub enum VariableValue {
-    Number(i32),
-    Boolean(bool),
-    Void,
-}
 
 fn main() {
     env_logger::init();
@@ -64,7 +47,7 @@ fn execute(
             Statement::VariableDefinition(s, expr) => {
                 let val = evaluate_expr(context, expr)?;
                 if context.variables.contains_key(&s) {
-                    return Err(RuntimeError(format!("Variable '{}' already exists", s)))
+                    return Err(RuntimeError(format!("Variable '{}' already exists", s)));
                 }
                 context.variables.insert(s, val);
             }
@@ -74,7 +57,7 @@ fn execute(
             }
             Statement::FunctionDefinition(s, params, expr) => {
                 if context.functions.contains_key(&s) {
-                    return Err(RuntimeError(format!("Function '{}' already exists", s)))
+                    return Err(RuntimeError(format!("Function '{}' already exists", s)));
                 }
                 context.functions.insert(s, (params, expr));
             }
