@@ -88,8 +88,9 @@ fn evaluate_expr(scope: &mut Scope, expr: Expression) -> Result<VariableValue, R
             )?;
             if function_name == "print" {
                 for val in values {
-                    println!("{}", val);
+                    print!("{} ", val);
                 }
+                println!();
                 Ok(VariableValue::Void)
             } else if let Some(VariableValue::Function(args, body)) =
                 scope.try_get_var(&function_name)

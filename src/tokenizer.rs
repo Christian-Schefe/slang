@@ -209,7 +209,7 @@ pub fn get_statements(tokens: Vec<Token>) -> Result<Vec<Statement>, SyntaxError>
     }
     if last_semicolon < tokens.len() {
         if let Some(last_expr) = try_get_expr(tokens[last_semicolon..].to_vec()) {
-            statements.push(Statement::ExpressionStatement(last_expr));
+            statements.push(Statement::ReturnStatement(last_expr));
             Ok(statements)
         } else {
             Err(SyntaxError(format!(

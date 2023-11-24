@@ -1,13 +1,12 @@
-let x = 0;
-let y = 1;
-let z = 0;
-let count = 100;
+fn is_even(num) {
+    while (num >= 2) {
+        num = num - 2;
+    };
+    num == 0
+};
 
-while (count > 0) {
-    z = x + y;
-    x = y;
-    y = z;
-    print(x);
-
-    count = count - 1;
+let c = 5;
+while (c >= 0) {
+    print("is even:", c, is_even(c));
+    c = c - 1;
 };
