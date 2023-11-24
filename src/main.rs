@@ -17,7 +17,7 @@ fn main() {
                 match statements {
                     Ok(sta) => {
                         let mut scope = Scope::new();
-                        if let Err(e) = execute(&mut scope, sta) {
+                        if let Err(e) = execute_statements(&mut scope, sta) {
                             error!("Error {:?}", e);
                         }
 
@@ -33,7 +33,10 @@ fn main() {
     }
 }
 
-fn execute(scope: &mut Scope, statements: Vec<Statement>) -> Result<VariableValue, RuntimeError> {
+fn execute_statements(
+    scope: &mut Scope,
+    statements: Vec<Statement>,
+) -> Result<VariableValue, RuntimeError> {
     debug!("Execute {:?}", statements);
     for statement in statements {
         match statement {
@@ -71,7 +74,7 @@ fn evaluate_expr(scope: &mut Scope, expr: Expression) -> Result<VariableValue, R
     match expr {
         Expression::Value(x) => Ok(x),
         Expression::Block(statements) => {
-            let result = execute(scope, statements)?;
+            let result = execute_statements(scope, statements)?;
             Ok(result)
         }
         Expression::BinaryOperator(l, r, op) => {
@@ -114,12 +117,14 @@ fn evaluate_expr(scope: &mut Scope, expr: Expression) -> Result<VariableValue, R
                 )))
             }
         }
-        Expression::IfElse(condition, if_body, else_body) => {
+        Expression::IfElse(condition, if_body, maybe_else_body) => {
             let do_if = evaluate_expr(scope, *condition)?;
             if let VariableValue::Boolean(true) = do_if {
                 evaluate_expr(scope, *if_body)
-            } else {
+            } else if let Some(else_body) = maybe_else_body {
                 evaluate_expr(scope, *else_body)
+            } else {
+                Ok(VariableValue::Unit)
             }
         }
     }

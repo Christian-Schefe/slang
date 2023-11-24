@@ -117,7 +117,7 @@ pub enum Expression {
     UnaryOperator(Box<Expression>, Operator),
     Block(Vec<Statement>),
     FunctionCall(String, Vec<Expression>),
-    IfElse(Box<Expression>, Box<Expression>, Box<Expression>),
+    IfElse(Box<Expression>, Box<Expression>, Option<Box<Expression>>),
 }
 
 #[derive(Debug, Clone)]
@@ -201,7 +201,7 @@ impl VariableValue {
         match (a, b) {
             (Self::Number(na), Self::Number(nb)) => Ok(VariableValue::Number(na + nb)),
             (x, y) => Err(RuntimeError(format!(
-                "Addition between {} and {} us not implemented!",
+                "Addition between {} and {} is not implemented!",
                 x, y
             ))),
         }
@@ -211,7 +211,7 @@ impl VariableValue {
         match (a, b) {
             (Self::Number(na), Self::Number(nb)) => Ok(VariableValue::Number(na - nb)),
             (x, y) => Err(RuntimeError(format!(
-                "Subtraction between {} and {} us not implemented!",
+                "Subtraction between {} and {} is not implemented!",
                 x, y
             ))),
         }
@@ -221,7 +221,7 @@ impl VariableValue {
         match (a, b) {
             (Self::Number(na), Self::Number(nb)) => Ok(VariableValue::Number(na * nb)),
             (x, y) => Err(RuntimeError(format!(
-                "Multiplication between {} and {} us not implemented!",
+                "Multiplication between {} and {} is not implemented!",
                 x, y
             ))),
         }
@@ -233,7 +233,7 @@ impl VariableValue {
             (Self::Boolean(na), Self::Boolean(nb)) => Ok(VariableValue::Boolean(na == nb)),
             (Self::String(na), Self::String(nb)) => Ok(VariableValue::Boolean(na == nb)),
             (x, y) => Err(RuntimeError(format!(
-                "Equal between {} and {} us not implemented!",
+                "Equal between {} and {} is not implemented!",
                 x, y
             ))),
         }
@@ -245,7 +245,7 @@ impl VariableValue {
             (Self::Boolean(na), Self::Boolean(nb)) => Ok(VariableValue::Boolean(na != nb)),
             (Self::String(na), Self::String(nb)) => Ok(VariableValue::Boolean(na != nb)),
             (x, y) => Err(RuntimeError(format!(
-                "Not Equal between {} and {} us not implemented!",
+                "Not Equal between {} and {} is not implemented!",
                 x, y
             ))),
         }
@@ -257,7 +257,7 @@ impl VariableValue {
             (Self::Boolean(na), Self::Boolean(nb)) => Ok(VariableValue::Boolean(na < nb)),
             (Self::String(na), Self::String(nb)) => Ok(VariableValue::Boolean(na < nb)),
             (x, y) => Err(RuntimeError(format!(
-                "Less Than between {} and {} us not implemented!",
+                "Less Than between {} and {} is not implemented!",
                 x, y
             ))),
         }
@@ -269,7 +269,7 @@ impl VariableValue {
             (Self::Boolean(na), Self::Boolean(nb)) => Ok(VariableValue::Boolean(na > nb)),
             (Self::String(na), Self::String(nb)) => Ok(VariableValue::Boolean(na > nb)),
             (x, y) => Err(RuntimeError(format!(
-                "Greater Than between {} and {} us not implemented!",
+                "Greater Than between {} and {} is not implemented!",
                 x, y
             ))),
         }
@@ -284,7 +284,7 @@ impl VariableValue {
             (Self::Boolean(na), Self::Boolean(nb)) => Ok(VariableValue::Boolean(na <= nb)),
             (Self::String(na), Self::String(nb)) => Ok(VariableValue::Boolean(na <= nb)),
             (x, y) => Err(RuntimeError(format!(
-                "Less Than Or Equal between {} and {} us not implemented!",
+                "Less Than Or Equal between {} and {} is not implemented!",
                 x, y
             ))),
         }
@@ -299,7 +299,7 @@ impl VariableValue {
             (Self::Boolean(na), Self::Boolean(nb)) => Ok(VariableValue::Boolean(na >= nb)),
             (Self::String(na), Self::String(nb)) => Ok(VariableValue::Boolean(na >= nb)),
             (x, y) => Err(RuntimeError(format!(
-                "Greater Than Or Equal between {} and {} us not implemented!",
+                "Greater Than Or Equal between {} and {} is not implemented!",
                 x, y
             ))),
         }
@@ -307,20 +307,20 @@ impl VariableValue {
     pub fn not(a: VariableValue) -> Result<VariableValue, RuntimeError> {
         match a {
             Self::Boolean(na) => Ok(VariableValue::Boolean(!na)),
-            x => Err(RuntimeError(format!("Not for {} us not implemented!", x))),
+            x => Err(RuntimeError(format!("Not for {} is not implemented!", x))),
         }
     }
     pub fn negate(a: VariableValue) -> Result<VariableValue, RuntimeError> {
         match a {
             Self::Number(na) => Ok(VariableValue::Number(-na)),
-            x => Err(RuntimeError(format!("Not for {} us not implemented!", x))),
+            x => Err(RuntimeError(format!("Not for {} is not implemented!", x))),
         }
     }
     pub fn unary_plus(a: VariableValue) -> Result<VariableValue, RuntimeError> {
         match a {
             Self::Number(na) => Ok(VariableValue::Number(0 + na)),
             x => Err(RuntimeError(format!(
-                "Unary Plus for {} us not implemented!",
+                "Unary Plus for {} is not implemented!",
                 x
             ))),
         }

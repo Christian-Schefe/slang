@@ -399,7 +399,11 @@ fn try_get_parenthesized_expr(t: Vec<Token>) -> Option<Expression> {
     if let (Some(Token::OpeningParethesis), Some(Token::ClosingParethesis)) =
         (t.get(0), t.get(t.len() - 1))
     {
-        try_get_expr(t[1..t.len() - 1].to_vec())
+        if t.len() == 2 {
+            Some(Expression::Value(VariableValue::Unit))
+        } else {
+            try_get_expr(t[1..t.len() - 1].to_vec())
+        }
     } else {
         None
     }
@@ -464,7 +468,18 @@ fn try_get_if_else_expr(t: Vec<Token>) -> Option<Expression> {
                     return Some(Expression::IfElse(
                         Box::new(condition),
                         Box::new(if_body),
-                        Box::new(else_body),
+                        Some(Box::new(else_body)),
+                    ));
+                }
+            } else {
+                if let (Some(condition), Some(if_body)) = (
+                    try_get_expr(t[2..stop_i].to_vec()),
+                    try_get_expr(t[stop_i + 1..].to_vec()),
+                ) {
+                    return Some(Expression::IfElse(
+                        Box::new(condition),
+                        Box::new(if_body),
+                        None
                     ));
                 }
             }
