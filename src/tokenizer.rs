@@ -304,6 +304,8 @@ fn try_get_expr(t: Vec<Token>) -> Option<Expression> {
         } else {
             None
         }
+    } else if let Some(expr) = try_get_parenthesized_expr(t.clone()) {
+        Some(expr)
     } else if let Some(expr) = try_get_block_expr(t.clone()) {
         Some(expr)
     } else if let Some(expr) = try_get_function_expr(t.clone()) {
@@ -312,6 +314,16 @@ fn try_get_expr(t: Vec<Token>) -> Option<Expression> {
         Some(expr)
     } else if let Some(expr) = try_get_if_else_expr(t.clone()) {
         Some(expr)
+    } else {
+        None
+    }
+}
+
+fn try_get_parenthesized_expr(t: Vec<Token>) -> Option<Expression> {
+    if let (Some(Token::OpeningParethesis), Some(Token::ClosingParethesis)) =
+        (t.get(0), t.get(t.len() - 1))
+    {
+        try_get_expr(t[1..t.len() - 1].to_vec())
     } else {
         None
     }

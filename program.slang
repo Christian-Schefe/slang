@@ -1,7 +1,2 @@
-let x = true;
-if (x) { 
-    if (true) { 
-        print(x)
-    } else print(5)
-}
-else print("no")
+let x = if (true) (if (false) 5 else 7) else 6;
+print(x);
