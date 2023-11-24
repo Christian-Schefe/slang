@@ -48,6 +48,10 @@ impl Display for Token {
             Token::Operator(Operator::LessThanOrEqual) => "<=".to_string(),
             Token::Operator(Operator::GreaterThan) => ">".to_string(),
             Token::Operator(Operator::GreaterThanOrEqual) => ">=".to_string(),
+            Token::Operator(Operator::NotEqual) => "!=".to_string(),
+            Token::Operator(Operator::Not) => "!".to_string(),
+            Token::Operator(Operator::Negate) => "-".to_string(),
+            Token::Operator(Operator::UnaryPlus) => "+".to_string(),
         };
         f.write_str(&stri)
     }
@@ -68,22 +72,30 @@ pub enum Operator {
     Add,
     Subtract,
     Multiply,
+    NotEqual,
     Equal,
     LessThan,
     GreaterThan,
     LessThanOrEqual,
     GreaterThanOrEqual,
+    Not,
+    Negate,
+    UnaryPlus,
 }
 
 impl Operator {
     pub fn precedence(&self) -> u32 {
         match self {
+            Operator::Not => 4,
+            Operator::Negate => 3,
+            Operator::UnaryPlus => 3,
             Operator::Multiply => 2,
             Operator::Add => 1,
             Operator::Subtract => 1,
             Operator::LessThan => 0,
             Operator::GreaterThan => 0,
             Operator::Equal => 0,
+            Operator::NotEqual => 0,
             Operator::LessThanOrEqual => 0,
             Operator::GreaterThanOrEqual => 0,
         }
@@ -101,7 +113,8 @@ pub enum CharToken {
 pub enum Expression {
     Value(VariableValue),
     Reference(String),
-    ComputedValue(Box<Expression>, Box<Expression>, Operator),
+    BinaryOperator(Box<Expression>, Box<Expression>, Operator),
+    UnaryOperator(Box<Expression>, Operator),
     Block(Vec<Statement>),
     FunctionCall(String, Vec<Expression>),
     IfElse(Box<Expression>, Box<Expression>, Box<Expression>),
@@ -166,14 +179,14 @@ pub enum VariableValue {
     Number(i32),
     Boolean(bool),
     String(String),
-    Void,
+    Unit,
     Function(Vec<String>, Box<Expression>),
 }
 
 impl Display for VariableValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let stri = match self {
-            VariableValue::Void => "void".to_string(),
+            VariableValue::Unit => "unit".to_string(),
             VariableValue::Number(n) => n.to_string(),
             VariableValue::Boolean(b) => b.to_string(),
             VariableValue::String(s) => s.to_string(),
@@ -221,6 +234,18 @@ impl VariableValue {
             (Self::String(na), Self::String(nb)) => Ok(VariableValue::Boolean(na == nb)),
             (x, y) => Err(RuntimeError(format!(
                 "Equal between {} and {} us not implemented!",
+                x, y
+            ))),
+        }
+    }
+
+    pub fn not_equals(a: VariableValue, b: VariableValue) -> Result<VariableValue, RuntimeError> {
+        match (a, b) {
+            (Self::Number(na), Self::Number(nb)) => Ok(VariableValue::Boolean(na != nb)),
+            (Self::Boolean(na), Self::Boolean(nb)) => Ok(VariableValue::Boolean(na != nb)),
+            (Self::String(na), Self::String(nb)) => Ok(VariableValue::Boolean(na != nb)),
+            (x, y) => Err(RuntimeError(format!(
+                "Not Equal between {} and {} us not implemented!",
                 x, y
             ))),
         }
@@ -276,6 +301,27 @@ impl VariableValue {
             (x, y) => Err(RuntimeError(format!(
                 "Greater Than Or Equal between {} and {} us not implemented!",
                 x, y
+            ))),
+        }
+    }
+    pub fn not(a: VariableValue) -> Result<VariableValue, RuntimeError> {
+        match a {
+            Self::Boolean(na) => Ok(VariableValue::Boolean(!na)),
+            x => Err(RuntimeError(format!("Not for {} us not implemented!", x))),
+        }
+    }
+    pub fn negate(a: VariableValue) -> Result<VariableValue, RuntimeError> {
+        match a {
+            Self::Number(na) => Ok(VariableValue::Number(-na)),
+            x => Err(RuntimeError(format!("Not for {} us not implemented!", x))),
+        }
+    }
+    pub fn unary_plus(a: VariableValue) -> Result<VariableValue, RuntimeError> {
+        match a {
+            Self::Number(na) => Ok(VariableValue::Number(0 + na)),
+            x => Err(RuntimeError(format!(
+                "Unary Plus for {} us not implemented!",
+                x
             ))),
         }
     }

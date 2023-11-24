@@ -63,7 +63,7 @@ fn execute(scope: &mut Scope, statements: Vec<Statement>) -> Result<VariableValu
             },
         }
     }
-    Ok(VariableValue::Void)
+    Ok(VariableValue::Unit)
 }
 
 fn evaluate_expr(scope: &mut Scope, expr: Expression) -> Result<VariableValue, RuntimeError> {
@@ -74,10 +74,14 @@ fn evaluate_expr(scope: &mut Scope, expr: Expression) -> Result<VariableValue, R
             let result = execute(scope, statements)?;
             Ok(result)
         }
-        Expression::ComputedValue(l, r, op) => {
+        Expression::BinaryOperator(l, r, op) => {
             let lval = evaluate_expr(scope, *l)?;
             let rval = evaluate_expr(scope, *r)?;
-            evaluate_op(lval, rval, op)
+            evaluate_binary_op(lval, rval, op)
+        }
+        Expression::UnaryOperator(expr, op) => {
+            let val = evaluate_expr(scope, *expr)?;
+            evaluate_unary_op(val, op)
         }
         Expression::Reference(var_name) => scope.get_var(&var_name),
         Expression::FunctionCall(function_name, params) => {
@@ -91,7 +95,7 @@ fn evaluate_expr(scope: &mut Scope, expr: Expression) -> Result<VariableValue, R
                     print!("{} ", val);
                 }
                 println!();
-                Ok(VariableValue::Void)
+                Ok(VariableValue::Unit)
             } else if let Some(VariableValue::Function(args, body)) =
                 scope.try_get_var(&function_name)
             {
@@ -121,7 +125,7 @@ fn evaluate_expr(scope: &mut Scope, expr: Expression) -> Result<VariableValue, R
     }
 }
 
-fn evaluate_op(
+fn evaluate_binary_op(
     a: VariableValue,
     b: VariableValue,
     op: Operator,
@@ -131,9 +135,20 @@ fn evaluate_op(
         Operator::Subtract => VariableValue::subtract(a, b),
         Operator::Multiply => VariableValue::multiply(a, b),
         Operator::Equal => VariableValue::equals(a, b),
+        Operator::NotEqual => VariableValue::not_equals(a, b),
         Operator::LessThan => VariableValue::less_than(a, b),
         Operator::LessThanOrEqual => VariableValue::less_than_or_equal(a, b),
         Operator::GreaterThan => VariableValue::greater_than(a, b),
         Operator::GreaterThanOrEqual => VariableValue::greater_than_or_equal(a, b),
+        _ => Err(RuntimeError(format!("{:?} is not a binary operator!", op))),
+    }
+}
+
+fn evaluate_unary_op(a: VariableValue, op: Operator) -> Result<VariableValue, RuntimeError> {
+    match op {
+        Operator::Not => VariableValue::not(a),
+        Operator::Negate => VariableValue::negate(a),
+        Operator::UnaryPlus => VariableValue::unary_plus(a),
+        _ => Err(RuntimeError(format!("{:?} is not a unary operator!", op))),
     }
 }

@@ -111,6 +111,7 @@ fn map_char_token(c: char, token: CharToken) -> Result<Token, SyntaxError> {
         '*' => Ok(Token::Operator(Operator::Multiply)),
         '<' => Ok(Token::Operator(Operator::LessThan)),
         '>' => Ok(Token::Operator(Operator::GreaterThan)),
+        '!' => Ok(Token::Operator(Operator::Not)),
         ';' => Ok(Token::Semicolon),
         ',' => Ok(Token::Comma),
         '{' => Ok(Token::OpeningBrace),
@@ -163,6 +164,16 @@ fn token_merger(tokens: Vec<Token>) -> Vec<Token> {
                     }
                     _ => new_tokens.push(cur_tkn.clone()),
                 },
+                Some(Token::Operator(Operator::Not)) => match cur_tkn {
+                    Token::Assign => {
+                        new_tokens.pop();
+                        new_tokens.push(Token::Operator(Operator::NotEqual));
+                    }
+                    Token::Operator(Operator::Not) => {
+                        new_tokens.pop();
+                    }
+                    _ => new_tokens.push(cur_tkn.clone()),
+                },
                 Some(Token::Operator(Operator::LessThan)) => match cur_tkn {
                     Token::Assign => {
                         new_tokens.pop();
@@ -174,6 +185,28 @@ fn token_merger(tokens: Vec<Token>) -> Vec<Token> {
                     Token::Assign => {
                         new_tokens.pop();
                         new_tokens.push(Token::Operator(Operator::GreaterThanOrEqual));
+                    }
+                    _ => new_tokens.push(cur_tkn.clone()),
+                },
+                Some(Token::Operator(Operator::Subtract)) => match cur_tkn {
+                    Token::Operator(Operator::Subtract) => {
+                        new_tokens.pop();
+                        new_tokens.push(Token::Operator(Operator::Add));
+                    }
+                    Token::Operator(Operator::Add) => {
+                        new_tokens.pop();
+                        new_tokens.push(Token::Operator(Operator::Subtract));
+                    }
+                    _ => new_tokens.push(cur_tkn.clone()),
+                },
+                Some(Token::Operator(Operator::Add)) => match cur_tkn {
+                    Token::Operator(Operator::Subtract) => {
+                        new_tokens.pop();
+                        new_tokens.push(Token::Operator(Operator::Subtract));
+                    }
+                    Token::Operator(Operator::Add) => {
+                        new_tokens.pop();
+                        new_tokens.push(Token::Operator(Operator::Add));
                     }
                     _ => new_tokens.push(cur_tkn.clone()),
                 },
@@ -441,10 +474,12 @@ fn try_get_if_else_expr(t: Vec<Token>) -> Option<Expression> {
 }
 
 fn try_get_op_expr(t: Vec<Token>) -> Option<Expression> {
-    // if matches!(t[0], Token::OpeningParethesis)
-    //     && matches!(t[t.len() - 1], Token::ClosingParethesis)
-    // {
-    //     return try_get_op_expr(t[1..t.len() - 1].to_vec());
+    // if matches!(t[0], Token::Operator(Operator::Not)) {
+    //     return try_get_expr(t[1..t.len()].to_vec())
+    //         .map(|expr| Expression::UnaryOperator(Box::new(expr), Operator::Not));
+    // } else if matches!(t[0], Token::Operator(Operator::Negate)) {
+    //     return try_get_expr(t[1..t.len()].to_vec())
+    //         .map(|expr| Expression::UnaryOperator(Box::new(expr), Operator::Negate));
     // }
     let mut min_precedence = None;
     let mut op_pos = None;
@@ -472,14 +507,31 @@ fn try_get_op_expr(t: Vec<Token>) -> Option<Expression> {
         return None;
     }
     if let Some((i, op)) = op_pos {
-        if let Some(left_expr) = try_get_expr(t[..i].to_vec()) {
-            if let Some(right_expr) = try_get_expr(t[(i + 1)..].to_vec()) {
+        if let Some(right_expr) = try_get_expr(t[(i + 1)..].to_vec()) {
+            if let Some(left_expr) = try_get_expr(t[..i].to_vec()) {
                 info!("Get ops: {:?} {:?} {:?}", left_expr, op, right_expr);
-                return Some(Expression::ComputedValue(
+                return Some(Expression::BinaryOperator(
                     Box::new(left_expr),
                     Box::new(right_expr),
                     op,
                 ));
+            } else if i == 0 {
+                info!("Get ops: {:?} {:?}", op, right_expr);
+                match op {
+                    Operator::Subtract => {
+                        return Some(Expression::UnaryOperator(
+                            Box::new(right_expr),
+                            Operator::Negate,
+                        ))
+                    }
+                    Operator::Add => {
+                        return Some(Expression::UnaryOperator(
+                            Box::new(right_expr),
+                            Operator::UnaryPlus,
+                        ))
+                    }
+                    _ => return Some(Expression::UnaryOperator(Box::new(right_expr), op)),
+                }
             }
         }
     }
