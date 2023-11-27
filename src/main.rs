@@ -50,33 +50,57 @@ fn execute_statements(
 ) -> Result<VariableValue, RuntimeError> {
     debug!("Execute {:?}", statements);
     for statement in statements {
-        match statement {
-            Statement::Empty => (),
-            Statement::VariableDefinition(s, expr) => {
-                let val = evaluate_expr(scope, expr)?;
-                scope.define_var(&s, val)?;
+        let r = execute_statement(scope, statement)?;
+        if !matches!(r, VariableValue::Unit) {
+            return Ok(r);
+        }
+    }
+    Ok(VariableValue::Unit)
+}
+
+fn execute_statement(
+    scope: &mut Scope,
+    statement: Statement,
+) -> Result<VariableValue, RuntimeError> {
+    match statement {
+        Statement::Empty => (),
+        Statement::VariableDefinition(s, expr) => {
+            let val = evaluate_expr(scope, expr)?;
+            scope.define_var(&s, val)?;
+        }
+        Statement::ReturnStatement(expr) => return evaluate_expr(scope, expr),
+        Statement::ExpressionStatement(expr) => {
+            evaluate_expr(scope, expr)?;
+        }
+        Statement::FunctionDefinition(s, params, expr) => {
+            scope.define_var(&s, VariableValue::Function(params, Box::new(expr)))?;
+        }
+        Statement::VariableAssignment(s, expr) => {
+            let val = evaluate_expr(scope, expr)?;
+            scope.set_var(&s, val)?;
+        }
+        Statement::WhileLoop(condition, body) => loop {
+            let do_iter = evaluate_expr(scope, condition.clone())?;
+            if let VariableValue::Boolean(true) = do_iter {
+                evaluate_expr(scope, body.clone())?;
+            } else {
+                break;
             }
-            Statement::ReturnStatement(expr) => return evaluate_expr(scope, expr),
-            Statement::ExpressionStatement(expr) => {
-                evaluate_expr(scope, expr)?;
-            }
-            Statement::FunctionDefinition(s, params, expr) => {
-                scope.define_var(&s, VariableValue::Function(params, Box::new(expr)))?;
-            }
-            Statement::VariableAssignment(s, expr) => {
-                let val = evaluate_expr(scope, expr)?;
-                scope.set_var(&s, val)?;
-            }
-            Statement::WhileLoop(condition, body) => loop {
+        },
+        Statement::ForLoop(statements, condition, body) => {
+            let (setup, step) = *statements;
+            execute_statement(scope, setup)?;
+            loop {
                 let do_iter = evaluate_expr(scope, condition.clone())?;
                 if let VariableValue::Boolean(true) = do_iter {
                     evaluate_expr(scope, body.clone())?;
                 } else {
                     break;
                 }
-            },
+                execute_statement(scope, step.clone())?;
+            }
         }
-    }
+    };
     Ok(VariableValue::Unit)
 }
 

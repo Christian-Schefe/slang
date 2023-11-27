@@ -14,11 +14,10 @@ It is a piping hot mess of code, I didn't research anything at all about making 
 ### To be implemented
 
 -   CLI (currently, 'program.slang' is executed)
+-   Assignment Operators (+=, -=, etc.)
 -   I/O
--   comments
 -   collections
 -   data structures
--   for loop (yes, currently there is no for loop)
 -   correct scoping (it is currently questionable at best)
 
 ## Syntax
@@ -81,6 +80,22 @@ let z = true;
 fn func(a, b) ();
 let w = func;
 print(x, y, z, w); // prints '5 hi true ["a", "b"] -> Value(Unit)'
+```
+
+### Loops (WIP)
+
+Neither `break` nor `continue` are implemented.
+
+```
+let count = 0;
+while (count < 5) {
+    print(count);
+    count = count + 1;
+};
+
+for (let i = 0; i < 5; i = i + 1;) {
+    print(i);
+};
 ```
 
 ### Scoping (WIP)

@@ -35,6 +35,7 @@ impl Display for Token {
             Token::Keyword(Keyword::Let) => "let".to_string(),
             Token::Keyword(Keyword::Return) => "return".to_string(),
             Token::Keyword(Keyword::While) => "while".to_string(),
+            Token::Keyword(Keyword::For) => "for".to_string(),
             Token::Keyword(Keyword::If) => "if".to_string(),
             Token::Keyword(Keyword::Else) => "else".to_string(),
             Token::Value(v) => v.to_string(),
@@ -61,6 +62,7 @@ impl Display for Token {
 pub enum Keyword {
     Let,
     While,
+    For,
     Return,
     Fn,
     If,
@@ -128,6 +130,7 @@ pub enum Statement {
     ReturnStatement(Expression),
     ExpressionStatement(Expression),
     WhileLoop(Expression, Expression),
+    ForLoop(Box<(Statement, Statement)>, Expression, Expression),
     Empty,
 }
 

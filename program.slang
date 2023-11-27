@@ -1,14 +1,6 @@
-let x = 5;
-let y = "hi";
-let z = true; # this is a comment
 
-fn func(a, b) ();
-let w = func;
-print(x, y, z, w);
-
-fn hello(x, y, z) {
-    let an = x + y+ -z;
-    return an;
+for (let i = 0; i < 5; i = i + 1;) {
+    print(i);
+    if (i > 1) 3
 };
-
-print(hello("a", "b", "c"))
+print(i);

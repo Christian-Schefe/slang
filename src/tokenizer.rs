@@ -76,10 +76,13 @@ fn preprocess(tokens: Vec<char>) -> Vec<CharToken> {
         }
     }
 
-    let tokens_without_whitespace = tokens_with_identifiers.into_iter().filter(|tkn| match tkn {
-        CharToken::Char(c) => !c.is_whitespace(),
-        _ => true,
-    }).collect();
+    let tokens_without_whitespace = tokens_with_identifiers
+        .into_iter()
+        .filter(|tkn| match tkn {
+            CharToken::Char(c) => !c.is_whitespace(),
+            _ => true,
+        })
+        .collect();
 
     tokens_without_whitespace
 }
@@ -132,6 +135,7 @@ fn map_string_token(s: String) -> Result<Token, SyntaxError> {
     match s.as_str() {
         "let" => Ok(Token::Keyword(Keyword::Let)),
         "while" => Ok(Token::Keyword(Keyword::While)),
+        "for" => Ok(Token::Keyword(Keyword::For)),
         "return" => Ok(Token::Keyword(Keyword::Return)),
         "fn" => Ok(Token::Keyword(Keyword::Fn)),
         "if" => Ok(Token::Keyword(Keyword::If)),
@@ -227,6 +231,12 @@ pub fn get_statements(tokens: Vec<Token>) -> Result<Vec<Statement>, SyntaxError>
             Token::ClosingBrace => {
                 block_indent -= 1;
             }
+            Token::OpeningParethesis => {
+                block_indent += 1;
+            }
+            Token::ClosingParethesis => {
+                block_indent -= 1;
+            }
             Token::Semicolon => {
                 if block_indent == 0 {
                     let s = get_statement(tokens[last_semicolon..i].to_vec())?;
@@ -279,6 +289,9 @@ fn get_statement(t: Vec<Token>) -> Result<Statement, SyntaxError> {
             }
         }
         if let Some(stmnt) = try_get_while_loop(t.clone()) {
+            return Ok(stmnt);
+        }
+        if let Some(stmnt) = try_get_for_loop(t.clone()) {
             return Ok(stmnt);
         }
         if let Some(stmnt) = try_get_function_definition_statement(t.clone()) {
@@ -364,6 +377,53 @@ fn try_get_while_loop(t: Vec<Token>) -> Option<Statement> {
     None
 }
 
+fn try_get_for_loop(t: Vec<Token>) -> Option<Statement> {
+    if let (Some(Token::Keyword(Keyword::For)), Some(Token::OpeningParethesis)) =
+        (t.get(0), t.get(1))
+    {
+        let mut indent_depth = 0;
+        let mut closing_parenthesis = None;
+
+        for i in 2..t.len() {
+            match &t[i] {
+                Token::OpeningParethesis => {
+                    indent_depth += 1;
+                }
+                Token::ClosingParethesis => {
+                    if indent_depth == 0 {
+                        closing_parenthesis = Some(i);
+                        break;
+                    } else {
+                        indent_depth -= 1;
+                    }
+                }
+                _ => (),
+            }
+        }
+
+
+        if let Some(stop_i) = closing_parenthesis {
+            let statements = get_statements(t[2..stop_i].to_vec());
+            if let (Some(s), Some(body)) = (statements.ok(), try_get_expr(t[stop_i + 1..].to_vec()))
+            {
+                if let (
+                    Some(Statement::VariableDefinition(_, _)),
+                    Some(Statement::ExpressionStatement(condition)),
+                    Some(Statement::VariableAssignment(_, _)),
+                ) = (s.get(0), s.get(1), s.get(2))
+                {
+                    return Some(Statement::ForLoop(
+                        Box::new((s[0].clone(), s[2].clone())),
+                        condition.clone(),
+                        body,
+                    ));
+                }
+            }
+        }
+    }
+    None
+}
+
 fn try_get_expr(t: Vec<Token>) -> Option<Expression> {
     let r = if t.len() < 1 {
         None
@@ -381,9 +441,9 @@ fn try_get_expr(t: Vec<Token>) -> Option<Expression> {
         Some(expr)
     } else if let Some(expr) = try_get_function_expr(t.clone()) {
         Some(expr)
-    } else if let Some(expr) = try_get_op_expr(t.clone()) {
-        Some(expr)
     } else if let Some(expr) = try_get_if_else_expr(t.clone()) {
+        Some(expr)
+    } else if let Some(expr) = try_get_op_expr(t.clone()) {
         Some(expr)
     } else {
         None
