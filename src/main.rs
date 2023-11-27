@@ -1,4 +1,4 @@
-use std::fs;
+use std::{env::args, fs};
 
 use log::{debug, error, info};
 use structs::*;
@@ -9,28 +9,39 @@ mod tokenizer;
 
 fn main() {
     env_logger::init();
-    if let Ok(program) = fs::read_to_string("program.slang") {
-        info!("program: {:?}", program);
-        match tokenize(&program) {
+    match read_program_file() {
+        Ok(program) => match tokenize(&program) {
             Ok(tokens) => {
+                info!("program: {:?}", program);
                 let statements = get_statements(tokens);
                 match statements {
                     Ok(sta) => {
                         let mut scope = Scope::new();
                         if let Err(e) = execute_statements(&mut scope, sta) {
-                            error!("Error {:?}", e);
+                            error!("Runtime Error {}", e.0);
                         }
 
                         info!("{:?}", scope);
                     }
                     Err(e) => {
-                        error!("couldn't parse program: {:?}", e)
+                        error!("Syntax Error: {}", e.0)
                     }
                 }
             }
-            Err(e) => error!("couldn't parse program: {:?}", e),
-        }
+            Err(e) => error!("Syntax Error: {}", e.0),
+        },
+        Err(e) => error!("SLANG didn't execute successfully: {}", e.0),
     }
+}
+
+fn read_program_file() -> Result<String, ClientError> {
+    let args: Vec<String> = args().collect();
+    let path = args
+        .get(1)
+        .ok_or(ClientError("No argument 'path' was given.".to_owned()))?;
+    let program = fs::read_to_string(path)
+        .map_err(|e| ClientError(format!("Couldn't read file at {}: {}", path, e)))?;
+    Ok(program)
 }
 
 fn execute_statements(

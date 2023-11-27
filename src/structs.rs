@@ -174,6 +174,10 @@ pub struct RuntimeError(pub String);
 #[derive(Debug)]
 pub struct SyntaxError(pub String);
 
+#[derive(Debug)]
+pub struct ClientError(pub String);
+
+
 #[derive(Debug, Clone)]
 pub enum VariableValue {
     Number(i32),
