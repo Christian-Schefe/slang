@@ -13,11 +13,18 @@ It is a piping hot mess of code, I didn't research anything at all about making 
 
 ### To be implemented
 
--   CLI (currently, 'program.slang' is executed)
--   Assignment Operators (+=, -=, etc.)
--   I/O
--   collections
--   data structures
+-   [ ] CLI (currently, 'program.slang' is executed)
+-   [ ] Assignment Operators (+=, -=, etc.)
+-   [ ] I/O
+-   [ ] collections
+-   [ ] data structures
+
+### TODO
+
+-   [ ] test scoping
+-   [ ] change statements to expressions (and modify for loop)
+-   [ ] expect brackets around if-else bodies?
+-   [ ] change `return` behaviour and implement empty returns without `()`;
 
 ## Syntax
 
@@ -100,7 +107,6 @@ for (let i = 0; i < 5; i = i + 1;) {
 ### Scoping (WIP)
 
 May not work as expected?
-
 
 ```
 let x = 5;
