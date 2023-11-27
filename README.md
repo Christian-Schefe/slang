@@ -42,11 +42,17 @@ let x = 5;
 x = 6;
 ```
 
+### Comments
+```
+let x = 5; # this is a comment
+x = # this is an inline comment # 6
+```
+
 ### Output
 
 ```
 let x = "hello world";
-print(x); // prints 'hello world'
+print(x); # prints 'hello world'
 ```
 
 ### Function Definition
@@ -73,7 +79,7 @@ let val = if (condition) {
 
 ```
 let x = 5 + 3 * (-3 + 2) - 8;
-print(x) // prints -6
+print(x) # prints -6
 ```
 
 ### Data Types
@@ -85,7 +91,7 @@ let z = true;
 
 fn func(a, b) ();
 let w = func;
-print(x, y, z, w); // prints '5 hi true ["a", "b"] -> Value(Unit)'
+print(x, y, z, w); # prints '5 hi true ["a", "b"] -> Value(Unit)'
 ```
 
 ### Loops (WIP)
@@ -113,7 +119,7 @@ let x = 5;
 {
     let y = x + 1;
 };
-print(y); // prints '6'
+print(y); # prints '6'
 ```
 
 <br>
@@ -122,8 +128,8 @@ print(y); // prints '6'
 let x = 5;
 
 fn func() {
-    x = 3; // RUNTIME ERROR
-    let z = x + 1; // RUNTIME ERROR
-    let x = 3; // valid, as x has not been defined yet
+    x = 3; # RUNTIME ERROR
+    let z = x + 1; # RUNTIME ERROR
+    let x = 3; # valid, as x has not been defined yet
 }
 ```
