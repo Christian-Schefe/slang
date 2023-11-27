@@ -139,6 +139,7 @@ pub struct Scope {
     pub variables: HashMap<String, VariableValue>,
 }
 
+#[derive(Debug)]
 pub struct Context {
     pub layers: Vec<Scope>,
     pub cur_layer: usize,
@@ -194,8 +195,31 @@ impl Context {
         })
     }
 
+    pub fn create_block_context(&self) -> Result<Context, RuntimeError> {
+        let i = self.cur_layer;
+        let mut new_layers = self.layers[0..i + 1].to_vec();
+        new_layers.push(Scope::new());
+        Ok(Context {
+            layers: new_layers,
+            cur_layer: i + 1,
+        })
+    }
+
     pub fn apply_fn_context(&mut self, var: &String, context: Context) -> Result<(), RuntimeError> {
         let i = self.get_var_layer(var)?;
+        for scope_i in 0..i + 1 {
+            let s = &mut self.layers[scope_i];
+            let s2 = &context.layers[scope_i];
+            for (key, val) in &s2.variables {
+                s.try_set_var(key, val.clone())
+                    .ok_or(RuntimeError(format!("Error applying context")))?;
+            }
+        }
+        Ok(())
+    }
+
+    pub fn apply_block_context(&mut self, context: Context) -> Result<(), RuntimeError> {
+        let i = self.cur_layer;
         for scope_i in 0..i + 1 {
             let s = &mut self.layers[scope_i];
             let s2 = &context.layers[scope_i];

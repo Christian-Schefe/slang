@@ -1,6 +1,13 @@
+let x = 0;
 
-for (let i = 0; i < 5; i = i + 1;) {
-    print(i);
-    if (i > 1) 3
+fn func1(y) {
+    x = x + y;
+    let z = "HEELLO \n{}";
+    print("hi");
 };
-print(i);
+
+let a = {
+    func1(2);
+};
+
+print(a, x);
