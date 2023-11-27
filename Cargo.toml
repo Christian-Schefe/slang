@@ -8,4 +8,5 @@ edition = "2021"
 [dependencies]
 env_logger = "0.10.1"
 log = "0.4.20"
+rand = "0.8.5"
 unescaper = "0.1.3"

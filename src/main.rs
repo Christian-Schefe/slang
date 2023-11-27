@@ -1,6 +1,11 @@
-use std::{env::args, fs};
+use std::{
+    env::args,
+    fs,
+    io::{stdin, stdout, Write},
+};
 
 use log::{debug, error, info};
+use rand::Rng;
 use structs::*;
 use tokenizer::*;
 
@@ -136,6 +141,36 @@ fn evaluate_expr(context: &mut Context, expr: Expression) -> Result<VariableValu
                 }
                 println!();
                 Ok(VariableValue::Unit)
+            } else if function_name == "random" {
+                if let (Some(VariableValue::Number(start)), Some(VariableValue::Number(end))) = (values.get(0), values.get(1)) {
+                    let mut rng = rand::thread_rng();
+                    let val = rng.gen_range(*start..*end);
+                    Ok(VariableValue::Number(val))
+                } else {
+                    Err(RuntimeError(format!("Invalid arguments for 'rand': {:?}", values)))
+                }
+            } else if function_name == "input" {
+                if let Some(val) = values.first() {
+                    print!("{}", val);
+                }
+                stdout()
+                    .flush()
+                    .map_err(|e| RuntimeError(format!("{}", e)))?;
+                let mut input = String::new();
+                stdin()
+                    .read_line(&mut input)
+                    .map_err(|e| RuntimeError(format!("{}", e)))?;
+                Ok(VariableValue::String(input.trim_end().to_owned()))
+            } else if function_name == "int" {
+                if let Some(VariableValue::String(s)) = values.first() {
+                    Ok(VariableValue::Number(str::parse(s.trim()).map_err(|_| {
+                        RuntimeError(format!("invalid arguments to function 'int': {:?}", values))
+                    })?))
+                } else {
+                    Err(RuntimeError(
+                        "invalid arguments to function 'int'".to_owned(),
+                    ))
+                }
             } else if let Some((_, VariableValue::Function(args, body))) =
                 context.try_get_var(&function_name)
             {
