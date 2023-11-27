@@ -110,10 +110,8 @@ fn evaluate_expr(context: &mut Context, expr: Expression) -> Result<VariableValu
     match expr {
         Expression::Value(x) => Ok(x),
         Expression::Block(statements) => {
-            println!("context: {:?}", context);
             let mut inner_context = context.create_block_context()?;
             let result = execute_statements(&mut inner_context, statements)?;
-            println!("inner context: {:?}", inner_context);
             context.apply_block_context(inner_context)?;
             Ok(result)
         }
