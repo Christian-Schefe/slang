@@ -16,12 +16,13 @@ fn main() {
                 let statements = get_statements(tokens);
                 match statements {
                     Ok(sta) => {
-                        let mut scope = Scope::new();
-                        if let Err(e) = execute_statements(&mut scope, sta) {
+                        let mut context = Context {
+                            cur_layer: 0,
+                            layers: vec![Scope::new()],
+                        };
+                        if let Err(e) = execute_statements(&mut context, sta) {
                             error!("Runtime Error: {}", e.0);
                         }
-
-                        info!("{:?}", scope);
                     }
                     Err(e) => {
                         error!("Syntax Error (Statements): {}", e.0)
@@ -45,12 +46,12 @@ fn read_program_file() -> Result<String, ClientError> {
 }
 
 fn execute_statements(
-    scope: &mut Scope,
+    context: &mut Context,
     statements: Vec<Statement>,
 ) -> Result<VariableValue, RuntimeError> {
     debug!("Execute {:?}", statements);
     for statement in statements {
-        let r = execute_statement(scope, statement)?;
+        let r = execute_statement(context, statement)?;
         if !matches!(r, VariableValue::Unit) {
             return Ok(r);
         }
@@ -59,91 +60,89 @@ fn execute_statements(
 }
 
 fn execute_statement(
-    scope: &mut Scope,
+    context: &mut Context,
     statement: Statement,
 ) -> Result<VariableValue, RuntimeError> {
     match statement {
         Statement::Empty => (),
         Statement::VariableDefinition(s, expr) => {
-            let val = evaluate_expr(scope, expr)?;
-            scope.define_var(&s, val)?;
+            let val = evaluate_expr(context, expr)?;
+            context.define_var(&s, val)?;
         }
-        Statement::ReturnStatement(expr) => return evaluate_expr(scope, expr),
+        Statement::ReturnStatement(expr) => return evaluate_expr(context, expr),
         Statement::ExpressionStatement(expr) => {
-            evaluate_expr(scope, expr)?;
+            evaluate_expr(context, expr)?;
         }
         Statement::FunctionDefinition(s, params, expr) => {
-            scope.define_var(&s, VariableValue::Function(params, Box::new(expr)))?;
+            context.define_var(&s, VariableValue::Function(params, Box::new(expr)))?;
         }
         Statement::VariableAssignment(s, expr) => {
-            let val = evaluate_expr(scope, expr)?;
-            scope.set_var(&s, val)?;
+            let val = evaluate_expr(context, expr)?;
+            context.set_var(&s, val)?;
         }
         Statement::WhileLoop(condition, body) => loop {
-            let do_iter = evaluate_expr(scope, condition.clone())?;
+            let do_iter = evaluate_expr(context, condition.clone())?;
             if let VariableValue::Boolean(true) = do_iter {
-                evaluate_expr(scope, body.clone())?;
+                evaluate_expr(context, body.clone())?;
             } else {
                 break;
             }
         },
         Statement::ForLoop(statements, condition, body) => {
             let (setup, step) = *statements;
-            execute_statement(scope, setup)?;
+            execute_statement(context, setup)?;
             loop {
-                let do_iter = evaluate_expr(scope, condition.clone())?;
+                let do_iter = evaluate_expr(context, condition.clone())?;
                 if let VariableValue::Boolean(true) = do_iter {
-                    evaluate_expr(scope, body.clone())?;
+                    evaluate_expr(context, body.clone())?;
                 } else {
                     break;
                 }
-                execute_statement(scope, step.clone())?;
+                execute_statement(context, step.clone())?;
             }
         }
     };
     Ok(VariableValue::Unit)
 }
 
-fn evaluate_expr(scope: &mut Scope, expr: Expression) -> Result<VariableValue, RuntimeError> {
+fn evaluate_expr(context: &mut Context, expr: Expression) -> Result<VariableValue, RuntimeError> {
     debug!("Evaluate Expr {:?}", expr);
     match expr {
         Expression::Value(x) => Ok(x),
         Expression::Block(statements) => {
-            let result = execute_statements(scope, statements)?;
+            let result = execute_statements(context, statements)?;
             Ok(result)
         }
         Expression::BinaryOperator(l, r, op) => {
-            let lval = evaluate_expr(scope, *l)?;
-            let rval = evaluate_expr(scope, *r)?;
+            let lval = evaluate_expr(context, *l)?;
+            let rval = evaluate_expr(context, *r)?;
             evaluate_binary_op(lval, rval, op)
         }
         Expression::UnaryOperator(expr, op) => {
-            let val = evaluate_expr(scope, *expr)?;
+            let val = evaluate_expr(context, *expr)?;
             evaluate_unary_op(val, op)
         }
-        Expression::Reference(var_name) => scope.get_var(&var_name),
+        Expression::Reference(var_name) => context.get_var(&var_name),
         Expression::FunctionCall(function_name, params) => {
             let values: Vec<VariableValue> = params
                 .into_iter()
-                .map(|p| evaluate_expr(scope, p))
-                .collect::<Result<Vec<VariableValue>, RuntimeError>>(
-            )?;
+                .map(|p| evaluate_expr(context, p))
+                .collect::<Result<Vec<VariableValue>, RuntimeError>>()?;
             if function_name == "print" {
                 for val in values {
                     print!("{} ", val);
                 }
                 println!();
                 Ok(VariableValue::Unit)
-            } else if let Some(VariableValue::Function(args, body)) =
-                scope.try_get_var(&function_name)
+            } else if let Some((_, VariableValue::Function(args, body))) =
+                context.try_get_var(&function_name)
             {
-                let mut inner_scope = Scope::new();
+                let mut inner_context = context.create_fn_context(&function_name)?;
                 for i in 0..values.len() {
-                    inner_scope
-                        .variables
-                        .insert(args[i].to_owned(), values[i].clone());
+                    inner_context.define_var(&args[i], values[i].clone())?;
                 }
-                let result = evaluate_expr(&mut inner_scope, *body)?;
+                let result = evaluate_expr(&mut inner_context, *body)?;
+                context.apply_fn_context(&function_name, inner_context)?;
                 Ok(result)
             } else {
                 Err(RuntimeError(format!(
@@ -153,11 +152,11 @@ fn evaluate_expr(scope: &mut Scope, expr: Expression) -> Result<VariableValue, R
             }
         }
         Expression::IfElse(condition, if_body, maybe_else_body) => {
-            let do_if = evaluate_expr(scope, *condition)?;
+            let do_if = evaluate_expr(context, *condition)?;
             if let VariableValue::Boolean(true) = do_if {
-                evaluate_expr(scope, *if_body)
+                evaluate_expr(context, *if_body)
             } else if let Some(else_body) = maybe_else_body {
-                evaluate_expr(scope, *else_body)
+                evaluate_expr(context, *else_body)
             } else {
                 Ok(VariableValue::Unit)
             }

@@ -18,7 +18,6 @@ It is a piping hot mess of code, I didn't research anything at all about making 
 -   I/O
 -   collections
 -   data structures
--   correct scoping (it is currently questionable at best)
 
 ## Syntax
 
@@ -100,8 +99,8 @@ for (let i = 0; i < 5; i = i + 1;) {
 
 ### Scoping (WIP)
 
-**Only** function calls are scoped at the moment, and they are completely isolated from the outside world.<br>
-Functions and variables defined outside **cannot** be accessed.
+May not work as expected?
+
 
 ```
 let x = 5;
