@@ -106,7 +106,7 @@ impl Operator {
 pub enum CharToken {
     Char(char),
     Identifier(String),
-    String(String, bool),
+    String(String),
 }
 
 #[derive(Debug, Clone)]

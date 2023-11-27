@@ -18,17 +18,17 @@ fn main() {
                     Ok(sta) => {
                         let mut scope = Scope::new();
                         if let Err(e) = execute_statements(&mut scope, sta) {
-                            error!("Runtime Error {}", e.0);
+                            error!("Runtime Error: {}", e.0);
                         }
 
                         info!("{:?}", scope);
                     }
                     Err(e) => {
-                        error!("Syntax Error: {}", e.0)
+                        error!("Syntax Error (Statements): {}", e.0)
                     }
                 }
             }
-            Err(e) => error!("Syntax Error: {}", e.0),
+            Err(e) => error!("Syntax Error (Tokens): {}", e.0),
         },
         Err(e) => error!("SLANG didn't execute successfully: {}", e.0),
     }

@@ -4,24 +4,10 @@ use crate::*;
 use unescaper::unescape;
 
 pub fn tokenize(program: &str) -> Result<Vec<Token>, SyntaxError> {
-    let chars = program.chars().map(|c| CharToken::Char(c));
+    let char_tokens = preprocess(program.chars().collect());
+    info!("initial tokens: {:?}", char_tokens);
 
-    let reduced_tokens = chars.fold(Vec::new(), char_reducer);
-    info!("reduced: {:?}", reduced_tokens);
-
-    let filtered_tokens: Vec<CharToken> = reduced_tokens
-        .into_iter()
-        .filter(|x| {
-            if let CharToken::Char(c) = x {
-                !c.is_whitespace()
-            } else {
-                true
-            }
-        })
-        .collect();
-    info!("filtered: {:?}", filtered_tokens);
-
-    let mapped_tokens = map_tokens(filtered_tokens)?;
+    let mapped_tokens = map_tokens(char_tokens)?;
     info!("mapped: {:?}", mapped_tokens);
 
     let merged_tokens = token_merger(mapped_tokens);
@@ -30,74 +16,85 @@ pub fn tokenize(program: &str) -> Result<Vec<Token>, SyntaxError> {
     Ok(merged_tokens)
 }
 
-fn char_reducer(mut acc: Vec<CharToken>, cur: CharToken) -> Vec<CharToken> {
-    if let CharToken::Char(cur_char) = cur {
-        match acc.pop() {
-            None => acc.push(cur),
-            Some(CharToken::String(mut last_string, is_closed)) => {
-                if cur_char == '"' {
-                    if !is_closed {
-                        acc.push(CharToken::String(last_string, true));
-                    } else {
-                        acc.push(CharToken::String(last_string, true));
-                        acc.push(CharToken::String(String::new(), false));
-                    }
-                } else {
-                    if !is_closed {
-                        last_string.push(cur_char);
-                        acc.push(CharToken::String(last_string, is_closed));
-                    } else {
-                        acc.push(CharToken::String(last_string, is_closed));
-                        acc.push(CharToken::Char(cur_char));
-                    }
+fn preprocess(tokens: Vec<char>) -> Vec<CharToken> {
+    let mut tokens_with_strings = Vec::new();
+    let mut cur_string: Option<String> = None;
+    for i in 0..tokens.len() {
+        cur_string = match tokens[i] {
+            '"' => match cur_string {
+                Some(str) => {
+                    tokens_with_strings.push(CharToken::String(str.clone()));
+                    None
                 }
-            }
-            Some(CharToken::Identifier(mut last_string)) => {
-                if cur_char == '"' {
-                    acc.push(CharToken::Identifier(last_string));
-                    acc.push(CharToken::String(String::new(), false));
-                } else {
-                    if cur_char.is_alphanumeric() || cur_char == '_' {
-                        last_string.push(cur_char);
-                        acc.push(CharToken::Identifier(last_string));
-                    } else {
-                        acc.push(CharToken::Identifier(last_string));
-                        acc.push(CharToken::Char(cur_char));
-                    }
+                None => Some(String::new()),
+            },
+            c => match cur_string {
+                Some(mut str) => {
+                    str.push(c);
+                    Some(str)
                 }
-            }
-            Some(CharToken::Char(last_char)) => {
-                if cur_char == '"' {
-                    acc.push(CharToken::Char(last_char));
-                    acc.push(CharToken::String(String::new(), false));
-                } else if (cur_char.is_alphanumeric() || cur_char == '_')
-                    && (last_char.is_alphanumeric() || last_char == '_')
-                {
-                    let mut s = String::new();
-                    s.push(last_char);
-                    s.push(cur_char);
-                    acc.push(CharToken::Identifier(s));
-                } else {
-                    acc.push(CharToken::Char(last_char));
-                    acc.push(CharToken::Char(cur_char));
+                None => {
+                    tokens_with_strings.push(CharToken::Char(c));
+                    None
+                }
+            },
+        }
+    }
+
+    let mut tokens_without_comments = Vec::new();
+    let mut cur_comment = false;
+    for i in 0..tokens_with_strings.len() {
+        match &tokens_with_strings[i] {
+            CharToken::Char('#') => cur_comment = !cur_comment,
+            CharToken::Char('\n') => cur_comment = false,
+            tkn => {
+                if !cur_comment {
+                    tokens_without_comments.push(tkn.clone())
                 }
             }
         }
-    } else {
-        error!("Invalid Char in Reducer: {:?}", cur);
     }
-    acc
+
+    let mut tokens_with_identifiers = Vec::new();
+    let mut cur_identifier = None;
+    for i in 0..tokens_without_comments.len() {
+        match &tokens_without_comments[i] {
+            CharToken::Char(c) => {
+                if c.is_alphanumeric() || *c == '_' {
+                    cur_identifier.get_or_insert(String::new()).push(*c);
+                } else if let Some(s) = cur_identifier {
+                    tokens_with_identifiers.push(CharToken::Identifier(s));
+                    cur_identifier = None;
+                    tokens_with_identifiers.push(CharToken::Char(*c));
+                } else {
+                    tokens_with_identifiers.push(CharToken::Char(*c));
+                }
+            }
+            tkn => {
+                tokens_with_identifiers.push(tkn.clone());
+            }
+        }
+    }
+
+    let tokens_without_whitespace = tokens_with_identifiers.into_iter().filter(|tkn| match tkn {
+        CharToken::Char(c) => !c.is_whitespace(),
+        _ => true,
+    }).collect();
+
+    tokens_without_whitespace
 }
 
 fn map_tokens(tokens: Vec<CharToken>) -> Result<Vec<Token>, SyntaxError> {
     tokens
         .into_iter()
-        .map(|x| match x {
-            CharToken::Char(c) => map_char_token(c, x),
-            CharToken::Identifier(s) => map_string_token(s),
-            CharToken::String(s, _) => {
-                let unescaped_s = unescape(&s).map_err(|_| SyntaxError("".to_owned()))?;
-                Ok(Token::Value(VariableValue::String(unescaped_s)))
+        .filter_map(|x| match x {
+            CharToken::Char(c) => Some(map_char_token(c, x)),
+            CharToken::Identifier(s) => Some(map_string_token(s)),
+            CharToken::String(s) => {
+                let unescaped_s = unescape(&s).map_err(|_| SyntaxError("".to_owned()));
+                let return_val =
+                    unescaped_s.and_then(|rs| Ok(Token::Value(VariableValue::String(rs))));
+                Some(return_val)
             }
         })
         .collect()
@@ -479,7 +476,7 @@ fn try_get_if_else_expr(t: Vec<Token>) -> Option<Expression> {
                     return Some(Expression::IfElse(
                         Box::new(condition),
                         Box::new(if_body),
-                        None
+                        None,
                     ));
                 }
             }
