@@ -1,10 +1,9 @@
-let list1 = [];
-let list2 = ["hi"];
-let list3 = [5, 3, 8, (5 + 4), list2, [5, 5]];
-list3 += "a";
+let 極list = [5, 3, 2, 4, 5];
 
-print(list1);
-print(list2);
-print(list2 + list3);
-print(list2);
-print(len(list3));
+let a = 極list[{
+    let a = 4;
+    let b = [a];
+    b[0]
+}];
+
+print(a);

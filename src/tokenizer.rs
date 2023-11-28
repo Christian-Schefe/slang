@@ -462,6 +462,8 @@ fn try_get_expr(t: Vec<Token>) -> Option<Expression> {
         Some(expr)
     } else if let Some(expr) = try_get_block_expr(t.clone()) {
         Some(expr)
+    } else if let Some(expr) = try_get_array_access(t.clone()) {
+        Some(expr)
     } else if let Some(expr) = try_get_array_expr(t.clone()) {
         Some(expr)
     } else if let Some(expr) = try_get_function_expr(t.clone()) {
@@ -475,6 +477,42 @@ fn try_get_expr(t: Vec<Token>) -> Option<Expression> {
     };
     info!("Get Expr: {:?} -> {:?}", t, r);
     r
+}
+
+fn try_get_array_access(t: Vec<Token>) -> Option<Expression> {
+    if !matches!(t.last(), Some(Token::ClosingBracket)) {
+        return None;
+    }
+
+    let mut opening_bracket = None;
+    let mut indent_level = 0;
+
+    for i in (0..t.len() - 1).rev() {
+        match t.get(i) {
+            Some(Token::ClosingBracket) => {
+                indent_level += 1;
+            }
+            Some(Token::OpeningBracket) => {
+                if indent_level == 0 {
+                    opening_bracket = Some(i);
+                    break;
+                }
+                indent_level -= 1;
+            }
+            _ => (),
+        }
+    }
+
+    if let Some(opening_i) = opening_bracket {
+        if let (Some(Expression::Reference(list)), Some(index_expr)) = (
+            try_get_expr(t[..opening_i].to_vec()),
+            try_get_expr(t[opening_i + 1..t.len() - 1].to_vec()),
+        ) {
+            return Some(Expression::Indexing(list, Box::new(index_expr)));
+        }
+    }
+
+    None
 }
 
 fn try_get_array_expr(t: Vec<Token>) -> Option<Expression> {

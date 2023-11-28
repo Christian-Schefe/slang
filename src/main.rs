@@ -129,6 +129,42 @@ fn evaluate_expr(context: &mut Context, expr: Expression) -> Result<VariableValu
                 .collect::<Result<Vec<VariableValue>, RuntimeError>>()?;
             Ok(VariableValue::List(list))
         }
+        Expression::Indexing(list_name, index_expr) => {
+            let list_val = context.get_var(&list_name)?;
+            let index_val = evaluate_expr(context, *index_expr)?;
+            match (list_val, index_val) {
+                (VariableValue::List(list), VariableValue::Number(i)) => {
+                    let index: usize = i
+                        .try_into()
+                        .map_err(|_| RuntimeError(format!("Invalid index: {}", i)))?;
+                    list.get(index)
+                        .ok_or(RuntimeError(format!(
+                            "Index outside of range: array len is {} but index is {}",
+                            list.len(),
+                            index
+                        )))
+                        .cloned()
+                }
+                (VariableValue::String(list), VariableValue::Number(i)) => {
+                    let index: usize = i
+                        .try_into()
+                        .map_err(|_| RuntimeError(format!("Invalid index: {}", i)))?;
+                    list.chars()
+                        .nth(index)
+                        .map(|c| VariableValue::String(String::from(c)))
+                        .ok_or(RuntimeError(format!(
+                            "Index outside of range: array len is {} but index is {}",
+                            list.len(),
+                            index
+                        )))
+                }
+                (a, b) => Err(RuntimeError(format!(
+                    "Invalid indexing statement: list of type {}, index {}",
+                    a.get_type(),
+                    b
+                ))),
+            }
+        }
         Expression::Block(statements) => {
             let mut inner_context = context.create_block_context()?;
             let result = execute_statements(&mut inner_context, statements)?;

@@ -94,6 +94,7 @@ pub enum Expression {
     Block(Vec<Statement>),
     FunctionCall(String, Vec<Expression>),
     IfElse(Box<Expression>, Box<Expression>, Option<Box<Expression>>),
+    Indexing(String, Box<Expression>),
 }
 
 #[derive(Debug, Clone)]

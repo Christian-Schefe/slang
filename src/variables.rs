@@ -74,6 +74,17 @@ impl Display for VariableValue {
 }
 
 impl VariableValue {
+    pub fn get_type(&self) -> String {
+        match self {
+            VariableValue::Boolean(_) => "Boolean",
+            VariableValue::Number(_) => "Number",
+            VariableValue::List(_) => "List",
+            VariableValue::Function(_, _) => "Function",
+            VariableValue::Unit => "Unit",
+            VariableValue::String(_) => "String",
+        }
+        .to_string()
+    }
     pub fn add(a: VariableValue, b: VariableValue) -> Result<VariableValue, RuntimeError> {
         match (a, b) {
             (Self::Number(na), Self::Number(nb)) => Ok(VariableValue::Number(na + nb)),
