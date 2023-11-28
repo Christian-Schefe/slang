@@ -55,7 +55,19 @@ impl Display for VariableValue {
             VariableValue::Boolean(b) => b.to_string(),
             VariableValue::String(s) => s.to_string(),
             VariableValue::Function(args, expr) => format!("{:?} -> {:?}", args, expr),
-            VariableValue::List(list) => format!("{:?}", list),
+            VariableValue::List(list) => {
+                let mut s = String::new();
+                s.push('[');
+                for i in 0..list.len() {
+                    if i > 0 {
+                        s.push(',');
+                        s.push(' ');
+                    }
+                    s.push_str(&list[i].to_string());
+                }
+                s.push(']');
+                s
+            }
         };
         f.write_str(&stri)
     }
