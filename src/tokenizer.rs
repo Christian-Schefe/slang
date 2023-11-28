@@ -120,6 +120,8 @@ fn map_char_token(c: char, token: CharToken) -> Result<Token, SyntaxError> {
         ']' => Ok(Token::ClosingBracket),
         '(' => Ok(Token::OpeningParethesis),
         ')' => Ok(Token::ClosingParethesis),
+        '&' => Ok(Token::Ampersand),
+        '|' => Ok(Token::VerticalBar),
         '.' => Ok(Token::Dot),
         '"' => Ok(Token::Quote),
         chr => {
@@ -225,6 +227,20 @@ fn token_merger(tokens: Vec<Token>) -> Vec<Token> {
                     Token::Assign => {
                         new_tokens.pop();
                         new_tokens.push(Token::OperatorAssign(Operator::Multiply));
+                    }
+                    _ => new_tokens.push(cur_tkn.clone()),
+                },
+                Some(Token::Ampersand) => match cur_tkn {
+                    Token::Ampersand => {
+                        new_tokens.pop();
+                        new_tokens.push(Token::Operator(Operator::And));
+                    }
+                    _ => new_tokens.push(cur_tkn.clone()),
+                },
+                Some(Token::VerticalBar) => match cur_tkn {
+                    Token::VerticalBar => {
+                        new_tokens.pop();
+                        new_tokens.push(Token::Operator(Operator::Or));
                     }
                     _ => new_tokens.push(cur_tkn.clone()),
                 },

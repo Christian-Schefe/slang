@@ -300,6 +300,8 @@ fn evaluate_binary_op(
         Operator::LessThanOrEqual => VariableValue::less_than_or_equal(a, b),
         Operator::GreaterThan => VariableValue::greater_than(a, b),
         Operator::GreaterThanOrEqual => VariableValue::greater_than_or_equal(a, b),
+        Operator::And => VariableValue::and(a, b),
+        Operator::Or => VariableValue::or(a, b),
         _ => Err(RuntimeError(format!("{:?} is not a binary operator!", op))),
     }
 }

@@ -13,6 +13,8 @@ pub enum Operator {
     GreaterThan,
     LessThanOrEqual,
     GreaterThanOrEqual,
+    And,
+    Or,
     Not,
     Negate,
     UnaryPlus,
@@ -21,18 +23,20 @@ pub enum Operator {
 impl Operator {
     pub fn precedence(&self) -> u32 {
         match self {
-            Operator::Not => 4,
-            Operator::Negate => 3,
-            Operator::UnaryPlus => 3,
-            Operator::Multiply => 2,
-            Operator::Add => 1,
-            Operator::Subtract => 1,
-            Operator::LessThan => 0,
-            Operator::GreaterThan => 0,
-            Operator::Equal => 0,
-            Operator::NotEqual => 0,
-            Operator::LessThanOrEqual => 0,
-            Operator::GreaterThanOrEqual => 0,
+            Operator::Not => 10,
+            Operator::Negate => 8,
+            Operator::UnaryPlus => 8,
+            Operator::Multiply => 6,
+            Operator::Add => 4,
+            Operator::Subtract => 4,
+            Operator::LessThan => 2,
+            Operator::GreaterThan => 2,
+            Operator::Equal => 2,
+            Operator::NotEqual => 2,
+            Operator::LessThanOrEqual => 2,
+            Operator::GreaterThanOrEqual => 2,
+            Operator::And => 0,
+            Operator::Or => 0,
         }
     }
 }
@@ -197,6 +201,24 @@ impl VariableValue {
             (Self::String(na), Self::String(nb)) => Ok(VariableValue::Boolean(na >= nb)),
             (x, y) => Err(RuntimeError(format!(
                 "Greater Than Or Equal between {} and {} is not implemented!",
+                x, y
+            ))),
+        }
+    }
+    pub fn and(a: VariableValue, b: VariableValue) -> Result<VariableValue, RuntimeError> {
+        match (a, b) {
+            (Self::Boolean(na), Self::Boolean(nb)) => Ok(VariableValue::Boolean(na && nb)),
+            (x, y) => Err(RuntimeError(format!(
+                "AND between {} and {} is not implemented!",
+                x, y
+            ))),
+        }
+    }
+    pub fn or(a: VariableValue, b: VariableValue) -> Result<VariableValue, RuntimeError> {
+        match (a, b) {
+            (Self::Boolean(na), Self::Boolean(nb)) => Ok(VariableValue::Boolean(na || nb)),
+            (x, y) => Err(RuntimeError(format!(
+                "OR between {} and {} is not implemented!",
                 x, y
             ))),
         }

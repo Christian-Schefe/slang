@@ -15,6 +15,8 @@ pub enum Token {
     OpeningParethesis,
     ClosingParethesis,
     ClosingBracket,
+    Ampersand,
+    VerticalBar,
     OpeningBracket,
     Semicolon,
     Assign,
@@ -38,6 +40,8 @@ impl Display for Token {
             Token::ClosingParethesis => ")".to_string(),
             Token::OpeningBracket => "[".to_string(),
             Token::ClosingBracket => "]".to_string(),
+            Token::Ampersand => "&".to_string(),
+            Token::VerticalBar => "|".to_string(),
             Token::Identifier(s) => s.to_string(),
             Token::Keyword(Keyword::Fn) => "fn".to_string(),
             Token::Keyword(Keyword::Let) => "let".to_string(),
@@ -61,6 +65,8 @@ impl Display for Token {
             Token::Operator(Operator::Not) => "!".to_string(),
             Token::Operator(Operator::Negate) => "-".to_string(),
             Token::Operator(Operator::UnaryPlus) => "+".to_string(),
+            Token::Operator(Operator::And) => "&&".to_string(),
+            Token::Operator(Operator::Or) => "||".to_string(),
         };
         f.write_str(&stri)
     }
