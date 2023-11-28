@@ -198,6 +198,10 @@ fn token_merger(tokens: Vec<Token>) -> Vec<Token> {
                         new_tokens.pop();
                         new_tokens.push(Token::Operator(Operator::Subtract));
                     }
+                    Token::Assign => {
+                        new_tokens.pop();
+                        new_tokens.push(Token::OperatorAssign(Operator::Subtract));
+                    }
                     _ => new_tokens.push(cur_tkn.clone()),
                 },
                 Some(Token::Operator(Operator::Add)) => match cur_tkn {
@@ -208,6 +212,17 @@ fn token_merger(tokens: Vec<Token>) -> Vec<Token> {
                     Token::Operator(Operator::Add) => {
                         new_tokens.pop();
                         new_tokens.push(Token::Operator(Operator::Add));
+                    }
+                    Token::Assign => {
+                        new_tokens.pop();
+                        new_tokens.push(Token::OperatorAssign(Operator::Add));
+                    }
+                    _ => new_tokens.push(cur_tkn.clone()),
+                },
+                Some(Token::Operator(Operator::Multiply)) => match cur_tkn {
+                    Token::Assign => {
+                        new_tokens.pop();
+                        new_tokens.push(Token::OperatorAssign(Operator::Multiply));
                     }
                     _ => new_tokens.push(cur_tkn.clone()),
                 },
@@ -251,6 +266,9 @@ pub fn get_statements(tokens: Vec<Token>) -> Result<Vec<Statement>, SyntaxError>
         if let Some(last_expr) = try_get_expr(tokens[last_semicolon..].to_vec()) {
             statements.push(Statement::ReturnStatement(last_expr));
             Ok(statements)
+        } else if let Ok(last_statement) = get_statement(tokens[last_semicolon..].to_vec()) {
+            statements.push(last_statement);
+            Ok(statements)
         } else {
             Err(SyntaxError(format!(
                 "Invalid last expression of length {}",
@@ -280,6 +298,10 @@ fn get_statement(t: Vec<Token>) -> Result<Statement, SyntaxError> {
             if let Some(Token::Assign) = t.get(1) {
                 if let Some(expr) = try_get_expr(t[2..].to_vec()) {
                     return Ok(Statement::VariableAssignment(s.to_string(), expr));
+                }
+            } else if let Some(Token::OperatorAssign(op)) = t.get(1) {
+                if let Some(expr) = try_get_expr(t[2..].to_vec()) {
+                    return Ok(Statement::OperatorAssignment(s.to_string(), expr, *op));
                 }
             }
         }
@@ -401,7 +423,6 @@ fn try_get_for_loop(t: Vec<Token>) -> Option<Statement> {
             }
         }
 
-
         if let Some(stop_i) = closing_parenthesis {
             let statements = get_statements(t[2..stop_i].to_vec());
             if let (Some(s), Some(body)) = (statements.ok(), try_get_expr(t[stop_i + 1..].to_vec()))
@@ -409,7 +430,7 @@ fn try_get_for_loop(t: Vec<Token>) -> Option<Statement> {
                 if let (
                     Some(Statement::VariableDefinition(_, _)),
                     Some(Statement::ExpressionStatement(condition)),
-                    Some(Statement::VariableAssignment(_, _)),
+                    Some(_),
                 ) = (s.get(0), s.get(1), s.get(2))
                 {
                     return Some(Statement::ForLoop(

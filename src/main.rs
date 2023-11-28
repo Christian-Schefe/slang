@@ -8,9 +8,11 @@ use log::{debug, error, info};
 use rand::Rng;
 use structs::*;
 use tokenizer::*;
+use variables::*;
 
 mod structs;
 mod tokenizer;
+mod variables;
 
 fn main() {
     env_logger::init();
@@ -85,6 +87,12 @@ fn execute_statement(
             let val = evaluate_expr(context, expr)?;
             context.set_var(&s, val)?;
         }
+        Statement::OperatorAssignment(s, expr, op) => {
+            let val = evaluate_expr(context, expr)?;
+            let var = context.get_var(&s)?;
+            let result = evaluate_binary_op(var, val, op)?;
+            context.set_var(&s, result)?;
+        }
         Statement::WhileLoop(condition, body) => loop {
             let do_iter = evaluate_expr(context, condition.clone())?;
             if let VariableValue::Boolean(true) = do_iter {
@@ -142,12 +150,17 @@ fn evaluate_expr(context: &mut Context, expr: Expression) -> Result<VariableValu
                 println!();
                 Ok(VariableValue::Unit)
             } else if function_name == "random" {
-                if let (Some(VariableValue::Number(start)), Some(VariableValue::Number(end))) = (values.get(0), values.get(1)) {
+                if let (Some(VariableValue::Number(start)), Some(VariableValue::Number(end))) =
+                    (values.get(0), values.get(1))
+                {
                     let mut rng = rand::thread_rng();
                     let val = rng.gen_range(*start..*end);
                     Ok(VariableValue::Number(val))
                 } else {
-                    Err(RuntimeError(format!("Invalid arguments for 'rand': {:?}", values)))
+                    Err(RuntimeError(format!(
+                        "Invalid arguments for 'rand': {:?}",
+                        values
+                    )))
                 }
             } else if function_name == "input" {
                 if let Some(val) = values.first() {
@@ -163,9 +176,14 @@ fn evaluate_expr(context: &mut Context, expr: Expression) -> Result<VariableValu
                 Ok(VariableValue::String(input.trim_end().to_owned()))
             } else if function_name == "int" {
                 if let Some(VariableValue::String(s)) = values.first() {
-                    Ok(VariableValue::Number(str::parse(s.trim()).map_err(|_| {
-                        RuntimeError(format!("invalid arguments to function 'int': {:?}", values))
-                    })?))
+                    Ok(VariableValue::Number(str::parse(s.trim()).map_err(
+                        |_| {
+                            RuntimeError(format!(
+                                "invalid arguments to function 'int': {:?}",
+                                values
+                            ))
+                        },
+                    )?))
                 } else {
                     Err(RuntimeError(
                         "invalid arguments to function 'int'".to_owned(),
