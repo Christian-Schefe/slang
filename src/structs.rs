@@ -101,6 +101,7 @@ pub enum Expression {
 pub enum Statement {
     VariableDefinition(String, Expression),
     VariableAssignment(String, Expression),
+    ArrayAssignment(String, Expression, Expression),
     OperatorAssignment(String, Expression, Operator),
     FunctionDefinition(String, Vec<String>, Expression),
     ReturnStatement(Expression),

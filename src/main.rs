@@ -87,6 +87,21 @@ fn execute_statement(
             let val = evaluate_expr(context, expr)?;
             context.set_var(&s, val)?;
         }
+        Statement::ArrayAssignment(s, index_expr, expr) => {
+            let list_val = context.get_var(&s)?;
+            if let VariableValue::List(mut list) = list_val {
+                let i = evaluate_expr(context, index_expr)?;
+                let val = evaluate_expr(context, expr)?;
+                if let VariableValue::Number(index) = i {
+                    list[index as usize] = val;
+                }
+                context.set_var(&s, VariableValue::List(list))?;
+            } else {
+                return Err(RuntimeError(format!(
+                    "Index outside of range: array len is but index is"
+                )));
+            }
+        }
         Statement::OperatorAssignment(s, expr, op) => {
             let val = evaluate_expr(context, expr)?;
             let var = context.get_var(&s)?;

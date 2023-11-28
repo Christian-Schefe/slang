@@ -307,6 +307,9 @@ fn get_statement(t: Vec<Token>) -> Result<Statement, SyntaxError> {
                 }
             }
         }
+        if let Some(stmnt) = try_get_array_index_assignment(t.clone()) {
+            return Ok(stmnt);
+        }
         if let Some(Token::Keyword(Keyword::Return)) = t.get(0) {
             if let Some(expr) = try_get_expr(t[1..].to_vec()) {
                 return Ok(Statement::ReturnStatement(expr));
@@ -326,6 +329,52 @@ fn get_statement(t: Vec<Token>) -> Result<Statement, SyntaxError> {
         }
         Err(SyntaxError(format!("Invalid Statement: {:?}", t)))
     }
+}
+
+fn try_get_array_index_assignment(t: Vec<Token>) -> Option<Statement> {
+    let mut indent_depth = 0;
+    let mut assign_op = None;
+
+    for i in 0..t.len() {
+        match &t[i] {
+            Token::OpeningParethesis => {
+                indent_depth += 1;
+            }
+            Token::ClosingParethesis => {
+                indent_depth -= 1;
+            }
+            Token::OpeningBrace => {
+                indent_depth += 1;
+            }
+            Token::ClosingBrace => {
+                indent_depth -= 1;
+            }
+            Token::OpeningBracket => {
+                indent_depth += 1;
+            }
+            Token::ClosingBracket => {
+                indent_depth -= 1;
+            }
+            Token::Assign => {
+                if indent_depth == 0 {
+                    assign_op = Some(i);
+                    break;
+                }
+            }
+            _ => (),
+        }
+    }
+
+    if let Some(assign_pos) = assign_op {
+        if let (Some(Expression::Indexing(arr, index_expr)), Some(expr)) = (
+            try_get_expr(t[..assign_pos].to_vec()),
+            try_get_expr(t[assign_pos + 1..].to_vec()),
+        ) {
+            return Some(Statement::ArrayAssignment(arr, *index_expr, expr));
+        }
+    }
+
+    None
 }
 
 fn try_get_function_definition_statement(t: Vec<Token>) -> Option<Statement> {
