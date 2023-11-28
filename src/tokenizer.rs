@@ -116,6 +116,8 @@ fn map_char_token(c: char, token: CharToken) -> Result<Token, SyntaxError> {
         ',' => Ok(Token::Comma),
         '{' => Ok(Token::OpeningBrace),
         '}' => Ok(Token::ClosingBrace),
+        '[' => Ok(Token::OpeningBracket),
+        ']' => Ok(Token::ClosingBracket),
         '(' => Ok(Token::OpeningParethesis),
         ')' => Ok(Token::ClosingParethesis),
         '.' => Ok(Token::Dot),
@@ -460,6 +462,8 @@ fn try_get_expr(t: Vec<Token>) -> Option<Expression> {
         Some(expr)
     } else if let Some(expr) = try_get_block_expr(t.clone()) {
         Some(expr)
+    } else if let Some(expr) = try_get_array_expr(t.clone()) {
+        Some(expr)
     } else if let Some(expr) = try_get_function_expr(t.clone()) {
         Some(expr)
     } else if let Some(expr) = try_get_if_else_expr(t.clone()) {
@@ -471,6 +475,71 @@ fn try_get_expr(t: Vec<Token>) -> Option<Expression> {
     };
     info!("Get Expr: {:?} -> {:?}", t, r);
     r
+}
+
+fn try_get_array_expr(t: Vec<Token>) -> Option<Expression> {
+    if let (Some(Token::OpeningBracket), Some(Token::ClosingBracket)) =
+        (t.get(0), t.get(t.len() - 1))
+    {
+        if t.len() == 2 {
+            return Some(Expression::Value(VariableValue::List(Vec::new())));
+        }
+        let mut indent_depth = 0;
+        let mut commas = Vec::new();
+        for i in 1..t.len() - 1 {
+            match &t[i] {
+                Token::OpeningBrace => {
+                    indent_depth += 1;
+                }
+                Token::ClosingBrace => {
+                    indent_depth -= 1;
+                }
+                Token::OpeningParethesis => {
+                    indent_depth += 1;
+                }
+                Token::ClosingParethesis => {
+                    indent_depth -= 1;
+                }
+                Token::OpeningBracket => {
+                    indent_depth += 1;
+                }
+                Token::ClosingBracket => {
+                    indent_depth -= 1;
+                }
+                Token::Comma => {
+                    if indent_depth == 0 {
+                        commas.push(i);
+                    }
+                }
+                _ => (),
+            }
+        }
+
+        if commas.len() == 0 {
+            return try_get_expr(t[1..t.len() - 1].to_vec())
+                .and_then(|expr| Some(Expression::List(vec![expr])));
+        }
+
+        let mut exprs = Vec::with_capacity(commas.len() - 1);
+
+        for i in 0..=commas.len() {
+            let start = if i == 0 { 1 } else { commas[i - 1] + 1 };
+            let end = if i == commas.len() {
+                t.len() - 1
+            } else {
+                commas[i]
+            };
+            if let Some(expr) = try_get_expr(t[start..end].to_vec()) {
+                exprs.push(expr);
+            } else {
+                return None;
+            }
+        }
+
+        Some(Expression::List(exprs))
+    } else {
+        None
+    }
 }
 
 fn try_get_parenthesized_expr(t: Vec<Token>) -> Option<Expression> {

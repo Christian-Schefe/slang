@@ -14,6 +14,8 @@ pub enum Token {
     ClosingBrace,
     OpeningParethesis,
     ClosingParethesis,
+    ClosingBracket,
+    OpeningBracket,
     Semicolon,
     Assign,
     OperatorAssign(Operator),
@@ -34,6 +36,8 @@ impl Display for Token {
             Token::ClosingBrace => "}".to_string(),
             Token::OpeningParethesis => "(".to_string(),
             Token::ClosingParethesis => ")".to_string(),
+            Token::OpeningBracket => "[".to_string(),
+            Token::ClosingBracket => "]".to_string(),
             Token::Identifier(s) => s.to_string(),
             Token::Keyword(Keyword::Fn) => "fn".to_string(),
             Token::Keyword(Keyword::Let) => "let".to_string(),
@@ -83,6 +87,7 @@ pub enum CharToken {
 #[derive(Debug, Clone)]
 pub enum Expression {
     Value(VariableValue),
+    List(Vec<Expression>),
     Reference(String),
     BinaryOperator(Box<Expression>, Box<Expression>, Operator),
     UnaryOperator(Box<Expression>, Operator),

@@ -122,6 +122,13 @@ fn evaluate_expr(context: &mut Context, expr: Expression) -> Result<VariableValu
     debug!("Evaluate Expr {:?}", expr);
     match expr {
         Expression::Value(x) => Ok(x),
+        Expression::List(exprs) => {
+            let list = exprs
+                .into_iter()
+                .map(|expr| evaluate_expr(context, expr))
+                .collect::<Result<Vec<VariableValue>, RuntimeError>>()?;
+            Ok(VariableValue::List(list))
+        }
         Expression::Block(statements) => {
             let mut inner_context = context.create_block_context()?;
             let result = execute_statements(&mut inner_context, statements)?;

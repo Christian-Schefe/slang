@@ -44,6 +44,7 @@ pub enum VariableValue {
     String(String),
     Unit,
     Function(Vec<String>, Box<Expression>),
+    List(Vec<VariableValue>),
 }
 
 impl Display for VariableValue {
@@ -54,6 +55,7 @@ impl Display for VariableValue {
             VariableValue::Boolean(b) => b.to_string(),
             VariableValue::String(s) => s.to_string(),
             VariableValue::Function(args, expr) => format!("{:?} -> {:?}", args, expr),
+            VariableValue::List(list) => format!("{:?}", list),
         };
         f.write_str(&stri)
     }
