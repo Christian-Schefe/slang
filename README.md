@@ -1,7 +1,7 @@
 # SLANG
 
 A simple interpreted scripting language inspired by Python and Rust (and written in Rust, too).<br>
-It is a piping hot mess of code, I didn't research anything at all about making a programming language.
+I didn't research anything at all about making a programming language, and the code is a bit messy. Some things may be a bit unusual (required semicolons after a function definition, for example).
 
 ### Features
 
@@ -13,18 +13,15 @@ It is a piping hot mess of code, I didn't research anything at all about making 
 
 ### To be implemented
 
--   [ ] CLI (currently, 'program.slang' is executed)
--   [ ] Assignment Operators (+=, -=, etc.)
--   [ ] I/O
--   [ ] collections
 -   [ ] data structures
+-   [ ] more built-in functions
+-   [ ] list iteration
 
-### TODO
+### Subject to change
 
--   [ ] test scoping
 -   [ ] change statements to expressions (and modify for loop)
 -   [ ] expect brackets around if-else bodies?
--   [ ] change `return` behaviour and implement empty returns without `()`;
+-   [ ] change `return` behaviour
 
 ## Syntax
 
