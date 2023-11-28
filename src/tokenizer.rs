@@ -311,6 +311,11 @@ fn get_statement(t: Vec<Token>) -> Result<Statement, SyntaxError> {
             return Ok(stmnt);
         }
         if let Some(Token::Keyword(Keyword::Return)) = t.get(0) {
+            if t.len() == 1 {
+                return Ok(Statement::ReturnStatement(Expression::Value(
+                    VariableValue::Unit,
+                )));
+            }
             if let Some(expr) = try_get_expr(t[1..].to_vec()) {
                 return Ok(Statement::ReturnStatement(expr));
             }
