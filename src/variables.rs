@@ -88,6 +88,7 @@ impl VariableValue {
     pub fn add(a: VariableValue, b: VariableValue) -> Result<VariableValue, RuntimeError> {
         match (a, b) {
             (Self::Number(na), Self::Number(nb)) => Ok(VariableValue::Number(na + nb)),
+            (Self::String(na), Self::String(nb)) => Ok(VariableValue::String(na + &nb)),
             (Self::List(mut na), Self::List(mut nb)) => {
                 na.append(&mut nb);
                 Ok(VariableValue::List(na))
