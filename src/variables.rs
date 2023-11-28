@@ -65,6 +65,14 @@ impl VariableValue {
     pub fn add(a: VariableValue, b: VariableValue) -> Result<VariableValue, RuntimeError> {
         match (a, b) {
             (Self::Number(na), Self::Number(nb)) => Ok(VariableValue::Number(na + nb)),
+            (Self::List(mut na), Self::List(mut nb)) => {
+                na.append(&mut nb);
+                Ok(VariableValue::List(na))
+            }
+            (Self::List(mut na), other) => {
+                na.push(other);
+                Ok(VariableValue::List(na))
+            }
             (x, y) => Err(RuntimeError(format!(
                 "Addition between {} and {} is not implemented!",
                 x, y

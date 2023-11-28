@@ -196,6 +196,14 @@ fn evaluate_expr(context: &mut Context, expr: Expression) -> Result<VariableValu
                         "invalid arguments to function 'int'".to_owned(),
                     ))
                 }
+            } else if function_name == "len" {
+                if let Some(VariableValue::List(list)) = values.first() {
+                    Ok(VariableValue::Number(list.len() as i32))
+                } else {
+                    Err(RuntimeError(
+                        "invalid arguments to function 'len'".to_owned(),
+                    ))
+                }
             } else if let Some((_, VariableValue::Function(args, body))) =
                 context.try_get_var(&function_name)
             {
