@@ -56,6 +56,7 @@ impl Display for Token {
             Token::Operator(Operator::Add) => "+".to_string(),
             Token::Operator(Operator::Subtract) => "-".to_string(),
             Token::Operator(Operator::Multiply) => "*".to_string(),
+            Token::Operator(Operator::Divide) => "/".to_string(),
             Token::Operator(Operator::Equal) => "==".to_string(),
             Token::Operator(Operator::LessThan) => "<".to_string(),
             Token::Operator(Operator::LessThanOrEqual) => "<=".to_string(),
@@ -67,6 +68,7 @@ impl Display for Token {
             Token::Operator(Operator::UnaryPlus) => "+".to_string(),
             Token::Operator(Operator::And) => "&&".to_string(),
             Token::Operator(Operator::Or) => "||".to_string(),
+            Token::Operator(Operator::Modulo) => "%".to_string(),
         };
         f.write_str(&stri)
     }

@@ -109,6 +109,8 @@ fn map_char_token(c: char, token: CharToken) -> Result<Token, SyntaxError> {
         '+' => Ok(Token::Operator(Operator::Add)),
         '-' => Ok(Token::Operator(Operator::Subtract)),
         '*' => Ok(Token::Operator(Operator::Multiply)),
+        '/' => Ok(Token::Operator(Operator::Divide)),
+        '%' => Ok(Token::Operator(Operator::Modulo)),
         '<' => Ok(Token::Operator(Operator::LessThan)),
         '>' => Ok(Token::Operator(Operator::GreaterThan)),
         '!' => Ok(Token::Operator(Operator::Not)),
@@ -817,7 +819,6 @@ fn try_get_function_expr(t: Vec<Token>) -> Option<Expression> {
         && matches!(t[t.len() - 1], Token::ClosingParethesis)
     {
         if let Token::Identifier(s) = &t[0] {
-            debug!("func");
             let mut params = Vec::new();
             let mut last_comma = 2;
             let mut indent_level = 0;

@@ -7,6 +7,7 @@ pub enum Operator {
     Add,
     Subtract,
     Multiply,
+    Divide,
     NotEqual,
     Equal,
     LessThan,
@@ -18,6 +19,7 @@ pub enum Operator {
     Not,
     Negate,
     UnaryPlus,
+    Modulo,
 }
 
 impl Operator {
@@ -27,6 +29,7 @@ impl Operator {
             Operator::Negate => 8,
             Operator::UnaryPlus => 8,
             Operator::Multiply => 6,
+            Operator::Divide => 6,
             Operator::Add => 4,
             Operator::Subtract => 4,
             Operator::LessThan => 2,
@@ -37,6 +40,7 @@ impl Operator {
             Operator::GreaterThanOrEqual => 2,
             Operator::And => 0,
             Operator::Or => 0,
+            Operator::Modulo => 7,
         }
     }
 }
@@ -123,6 +127,24 @@ impl VariableValue {
             (Self::Number(na), Self::Number(nb)) => Ok(VariableValue::Number(na * nb)),
             (x, y) => Err(RuntimeError(format!(
                 "Multiplication between {} and {} is not implemented!",
+                x, y
+            ))),
+        }
+    }
+    pub fn divide(a: VariableValue, b: VariableValue) -> Result<VariableValue, RuntimeError> {
+        match (a, b) {
+            (Self::Number(na), Self::Number(nb)) => Ok(VariableValue::Number(na / nb)),
+            (x, y) => Err(RuntimeError(format!(
+                "Division between {} and {} is not implemented!",
+                x, y
+            ))),
+        }
+    }
+    pub fn modulo(a: VariableValue, b: VariableValue) -> Result<VariableValue, RuntimeError> {
+        match (a, b) {
+            (Self::Number(na), Self::Number(nb)) => Ok(VariableValue::Number(na % nb)),
+            (x, y) => Err(RuntimeError(format!(
+                "Division between {} and {} is not implemented!",
                 x, y
             ))),
         }

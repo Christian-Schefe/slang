@@ -294,6 +294,7 @@ fn evaluate_binary_op(
         Operator::Add => VariableValue::add(a, b),
         Operator::Subtract => VariableValue::subtract(a, b),
         Operator::Multiply => VariableValue::multiply(a, b),
+        Operator::Divide => VariableValue::divide(a, b),
         Operator::Equal => VariableValue::equals(a, b),
         Operator::NotEqual => VariableValue::not_equals(a, b),
         Operator::LessThan => VariableValue::less_than(a, b),
@@ -302,6 +303,7 @@ fn evaluate_binary_op(
         Operator::GreaterThanOrEqual => VariableValue::greater_than_or_equal(a, b),
         Operator::And => VariableValue::and(a, b),
         Operator::Or => VariableValue::or(a, b),
+        Operator::Modulo => VariableValue::modulo(a, b),
         _ => Err(RuntimeError(format!("{:?} is not a binary operator!", op))),
     }
 }

@@ -2,22 +2,6 @@ let board = [["_", "_", "_"], ["_", "_", "_"], ["_", "_", "_"]];
 
 let cur_player = true;
 
-fn mod(x, m) {
-    while (x >= m) {
-        x -= m;
-    };
-    x
-};
-
-fn div(x, m) {
-    let c = 0;
-    while (x >= m) {
-        x -= m;
-        c += 1;
-    };
-    c
-};
-
 fn get(x, y) {
     let row = board[y];
     row[x]
@@ -67,15 +51,16 @@ let is_playing = true;
 
 while (is_playing) {
     let pos = int(input("board pos: "));
-    let x = mod(pos - 1, 3);
-    let y = div(pos - 1, 3);
+    let x = (pos - 1) % 3;
+    let y = (pos - 1) / 3;
     
     if (set(x, y, if (cur_player) "x" else "o")) {
-        cur_player = !cur_player;
         print_board();
 
         if (check_for_win()) {
+            print("player", if (cur_player) "'x'" else "'o'", "won!");
             is_playing = false;
         };
+        cur_player = !cur_player;
     };
 };
