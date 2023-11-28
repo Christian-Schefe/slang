@@ -596,24 +596,13 @@ fn try_get_array_expr(t: Vec<Token>) -> Option<Expression> {
         let mut commas = Vec::new();
         for i in 1..t.len() - 1 {
             match &t[i] {
-                Token::OpeningBrace => {
-                    indent_depth += 1;
-                }
-                Token::ClosingBrace => {
-                    indent_depth -= 1;
-                }
-                Token::OpeningParethesis => {
-                    indent_depth += 1;
-                }
-                Token::ClosingParethesis => {
-                    indent_depth -= 1;
-                }
-                Token::OpeningBracket => {
-                    indent_depth += 1;
-                }
-                Token::ClosingBracket => {
-                    indent_depth -= 1;
-                }
+                Token::OpeningBrace => indent_depth += 1,
+                Token::OpeningParethesis => indent_depth += 1,
+                Token::OpeningBracket => indent_depth += 1,
+
+                Token::ClosingBrace => indent_depth -= 1,
+                Token::ClosingParethesis => indent_depth -= 1,
+                Token::ClosingBracket => indent_depth -= 1,
                 Token::Comma => {
                     if indent_depth == 0 {
                         commas.push(i);
@@ -690,22 +679,19 @@ fn try_get_if_else_expr(t: Vec<Token>) -> Option<Expression> {
 
         if let Some(stop_i) = closing_parenthesis {
             let mut else_pos = None;
+            let mut indent_level = 0;
             for i in stop_i + 1..t.len() {
                 match &t[i] {
-                    Token::OpeningParethesis => {
-                        indent_depth += 1;
-                    }
-                    Token::ClosingParethesis => {
-                        indent_depth -= 1;
-                    }
-                    Token::OpeningBrace => {
-                        indent_depth += 1;
-                    }
-                    Token::ClosingBrace => {
-                        indent_depth -= 1;
-                    }
+                    Token::OpeningBrace => indent_level += 1,
+                    Token::OpeningParethesis => indent_level += 1,
+                    Token::OpeningBracket => indent_level += 1,
+
+                    Token::ClosingBrace => indent_level -= 1,
+                    Token::ClosingParethesis => indent_level -= 1,
+                    Token::ClosingBracket => indent_level -= 1,
+
                     Token::Keyword(Keyword::Else) => {
-                        if indent_depth == 0 {
+                        if indent_level == 0 {
                             else_pos = Some(i);
                             break;
                         }
@@ -758,9 +744,13 @@ fn try_get_op_expr(t: Vec<Token>) -> Option<Expression> {
     for i in 0..t.len() {
         match t[i] {
             Token::OpeningBrace => indent_level += 1,
-            Token::ClosingBrace => indent_level -= 1,
             Token::OpeningParethesis => indent_level += 1,
+            Token::OpeningBracket => indent_level += 1,
+
+            Token::ClosingBrace => indent_level -= 1,
             Token::ClosingParethesis => indent_level -= 1,
+            Token::ClosingBracket => indent_level -= 1,
+
             Token::Operator(op) => {
                 let precedence = op.precedence();
                 if indent_level == 0 && !min_precedence.is_some_and(|min_val| min_val < precedence)

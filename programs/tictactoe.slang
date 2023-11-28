@@ -45,7 +45,7 @@ fn check_dir_for_win(x, y, dx, dy) {
 };
 
 fn print_board() {
-    for (let y = 0; y < 3; y+= 1) {
+    for (let y = 0; y < 3; y += 1) {
         print(board[y]);
     }
 };
