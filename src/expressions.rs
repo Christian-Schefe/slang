@@ -1,6 +1,9 @@
+use std::collections::HashMap;
+
 use log::{debug, info};
 
 use crate::{
+    context::Scope,
     statements::{get_statements, Statement},
     tokenizer::{Keyword, Token},
     variables::{Operator, VariableValue},
@@ -10,6 +13,7 @@ use crate::{
 pub enum Expression {
     Value(VariableValue),
     List(Vec<Expression>),
+    Object(HashMap<String, Expression>),
     Reference(ReferenceExpr),
     BinaryOperator(Box<Expression>, Box<Expression>, Operator),
     UnaryOperator(Box<Expression>, Operator),
@@ -38,6 +42,8 @@ pub fn try_get_expr(t: Vec<Token>) -> Option<Expression> {
         }
     } else if let Some(expr) = try_get_parenthesized_expr(t.clone()) {
         Some(expr)
+    } else if let Some(expr) = try_get_object_value(t.clone()) {
+        Some(expr)
     } else if let Some(expr) = try_get_block_expr(t.clone()) {
         Some(expr)
     } else if let Some(expr) = try_get_array_expr(t.clone()) {
@@ -53,6 +59,74 @@ pub fn try_get_expr(t: Vec<Token>) -> Option<Expression> {
     };
     info!("Get Expr: {:?} -> {:?}", t, r);
     r
+}
+
+pub fn try_get_object_value(t: Vec<Token>) -> Option<Expression> {
+    if t.len() >= 2
+        && matches!(t[0], Token::OpeningBrace)
+        && matches!(t[t.len() - 1], Token::ClosingBrace)
+    {
+        if t.len() == 2 {
+            return Some(Expression::Value(VariableValue::Object(Scope {
+                variables: HashMap::new(),
+            })));
+        }
+        let mut indent_depth = 0;
+        let mut colons = Vec::new();
+        for i in 1..t.len() - 1 {
+            match &t[i] {
+                Token::OpeningBrace => indent_depth += 1,
+                Token::OpeningParethesis => indent_depth += 1,
+                Token::OpeningBracket => indent_depth += 1,
+
+                Token::ClosingBrace => indent_depth -= 1,
+                Token::ClosingParethesis => indent_depth -= 1,
+                Token::ClosingBracket => indent_depth -= 1,
+                Token::Colon => {
+                    if indent_depth == 0 {
+                        colons.push(i);
+                    }
+                }
+                _ => (),
+            }
+        }
+
+        if colons.len() == 0 {
+            return None;
+        }
+
+        let mut key_val_pairs = HashMap::new();
+
+        for i in 0..colons.len() {
+            let key_pos = colons[i] - 1;
+            let val_start = colons[i] + 1;
+            if i + 1 < colons.len() {
+                let val_end = colons[i + 1] - 2;
+                if let (Some(Token::Identifier(key)), Some(expr), Some(Token::Comma)) = (
+                    t.get(key_pos),
+                    try_get_expr(t[val_start..val_end].to_vec()),
+                    t.get(val_end),
+                ) {
+                    key_val_pairs.insert(key.to_string(), expr);
+                } else {
+                    return None;
+                }
+            } else {
+                if let (Some(Token::Identifier(key)), Some(expr)) = (
+                    t.get(key_pos),
+                    try_get_expr(t[val_start..t.len() - 1].to_vec()),
+                ) {
+                    key_val_pairs.insert(key.to_string(), expr);
+                } else {
+                    return None;
+                }
+            }
+        }
+
+        Some(Expression::Object(key_val_pairs))
+    } else {
+        None
+    }
 }
 
 pub fn try_get_object_access(t: Vec<Token>) -> Option<ReferenceExpr> {

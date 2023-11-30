@@ -24,6 +24,7 @@ pub enum Token {
     Comma,
     Quote,
     Dot,
+    Colon,
     Operator(Operator),
 }
 
@@ -34,6 +35,7 @@ impl Display for Token {
             Token::OperatorAssign(op) => format!("={}", Token::Operator(*op)),
             Token::Comma => ",".to_string(),
             Token::Quote => "\"".to_string(),
+            Token::Colon => ":".to_string(),
             Token::OpeningBrace => "{".to_string(),
             Token::ClosingBrace => "}".to_string(),
             Token::OpeningParethesis => "(".to_string(),
@@ -205,6 +207,7 @@ fn map_char_token(c: char, token: CharToken) -> Result<Token, SyntaxError> {
         '!' => Ok(Token::Operator(Operator::Not)),
         ';' => Ok(Token::Semicolon),
         ',' => Ok(Token::Comma),
+        ':' => Ok(Token::Colon),
         '{' => Ok(Token::OpeningBrace),
         '}' => Ok(Token::ClosingBrace),
         '[' => Ok(Token::OpeningBracket),

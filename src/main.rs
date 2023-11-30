@@ -5,17 +5,17 @@ use std::{
     io::{stdin, stdout, Write},
 };
 
+use context::*;
 use expressions::*;
 use log::{debug, error, info};
 use rand::Rng;
 use statements::*;
-use context::*;
 use tokenizer::*;
 use variables::*;
 
+mod context;
 mod expressions;
 mod statements;
-mod context;
 mod tokenizer;
 mod variables;
 
@@ -135,6 +135,14 @@ fn evaluate_expr(context: &mut Context, expr: Expression) -> Result<VariableValu
                 .collect::<Result<Vec<VariableValue>, RuntimeError>>()?;
             Ok(VariableValue::List(list))
         }
+        Expression::Object(vars) => {
+            let mut variables = HashMap::with_capacity(vars.len());
+            for (key, val_expr) in vars.into_iter() {
+                let val = evaluate_expr(context, val_expr)?;
+                variables.insert(key, val);
+            }
+            Ok(VariableValue::Object(Scope { variables }))
+        }
         Expression::Block(statements) => {
             let mut inner_context = context.create_block_context()?;
             let result = execute_statements(&mut inner_context, statements)?;
@@ -179,10 +187,6 @@ fn evaluate_expr(context: &mut Context, expr: Expression) -> Result<VariableValu
                             values
                         )))
                     };
-                } else if built_in_fn == "obj" {
-                    let mut variables = HashMap::new();
-                    variables.insert("a".to_string(), VariableValue::Number(1));
-                    return Ok(VariableValue::Object(Scope { variables }));
                 } else if built_in_fn == "input" {
                     if let Some(val) = values.first() {
                         print!("{}", val);
