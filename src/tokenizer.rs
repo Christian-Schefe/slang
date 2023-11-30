@@ -387,9 +387,7 @@ fn try_get_assignment(t: Vec<Token>) -> Option<Statement> {
     if let Some(pos) = assign_pos {
         let maybe_ref_expr = try_get_reference_expr(t[..pos].to_vec());
         let maybe_val_expr = try_get_expr(t[pos + 1..].to_vec());
-        if let (Some(ref_expr), Some(val_expr)) =
-            (maybe_ref_expr, maybe_val_expr)
-        {
+        if let (Some(ref_expr), Some(val_expr)) = (maybe_ref_expr, maybe_val_expr) {
             Some(Statement::VariableAssignment(ref_expr, val_expr))
         } else {
             None
@@ -559,48 +557,23 @@ fn try_get_expr(t: Vec<Token>) -> Option<Expression> {
 }
 
 fn try_get_object_access(t: Vec<Token>) -> Option<ReferenceExpr> {
-    let mut dots = Vec::new();
-    let mut indent_depth = 0;
-
-    for i in 1..t.len() - 1 {
-        match &t[i] {
-            Token::OpeningBrace => indent_depth += 1,
-            Token::OpeningParethesis => indent_depth += 1,
-            Token::OpeningBracket => indent_depth += 1,
-
-            Token::ClosingBrace => indent_depth -= 1,
-            Token::ClosingParethesis => indent_depth -= 1,
-            Token::ClosingBracket => indent_depth -= 1,
-            Token::Dot => {
-                if indent_depth == 0 {
-                    dots.push(i);
-                }
-            }
-            _ => (),
-        }
-    }
-
-    if dots.len() < 1 {
+    if t.len() < 3 {
         return None;
     }
-
-    let mut prev_ref: Option<ReferenceExpr> = None;
-
-    for i in 0..=dots.len() {
-        let start = if i == 0 { 0 } else { dots[i - 1] + 1 };
-        let end = if i == dots.len() { t.len() } else { dots[i] };
-        if let Some(ReferenceExpr::Variable(s)) = try_get_reference_expr(t[start..end].to_vec()) {
-            if let Some(ref mut prev_r) = prev_ref {
-                *prev_r = ReferenceExpr::Object(Box::new(prev_r.clone()), s);
-            } else {
-                prev_ref = Some(ReferenceExpr::Variable(s));
-            }
+    if let Some(Token::Dot) = t.get(t.len() - 2) {
+        let pre_ref_opt = try_get_reference_expr(t[..t.len() - 2].to_vec());
+        let property_opt = t.last();
+        if let (Some(pre_ref), Some(Token::Identifier(property))) = (pre_ref_opt, property_opt) {
+            Some(ReferenceExpr::Object(
+                Box::new(pre_ref),
+                property.to_owned(),
+            ))
         } else {
-            return None;
+            None
         }
+    } else {
+        None
     }
-
-    prev_ref
 }
 
 fn try_get_reference_expr(t: Vec<Token>) -> Option<ReferenceExpr> {
@@ -649,10 +622,7 @@ fn try_get_array_access(t: Vec<Token>) -> Option<ReferenceExpr> {
             try_get_expr(t[..opening_i].to_vec()),
             try_get_expr(t[opening_i + 1..t.len() - 1].to_vec()),
         ) {
-            return Some(ReferenceExpr::Index(
-                Box::new(list),
-                Box::new(index_expr),
-            ));
+            return Some(ReferenceExpr::Index(Box::new(list), Box::new(index_expr)));
         }
     }
 

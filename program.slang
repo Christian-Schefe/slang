@@ -1,14 +1,16 @@
-fn modify(ob, x) {
-    ob += x;
-    ob
-};
+let board = [[0, obj()], [2, [3, 4]]];
+let ob = obj();
+ob.a = board;
 
-let b = [1, 2];
+let two = board[1][1][0];
+print(two);
+print(ob);
 
-print(b);
+ob.a[1][1] = 4;
+print(board[0][1]);
+board[0][1].a = board;
+let val = board[0][1].a[1][1];
 
-modify(b, 5);
-print(b);
-b = modify(b, 5);
-
-print(b);
+print(ob);
+print(board);
+print(val);

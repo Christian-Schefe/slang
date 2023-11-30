@@ -226,7 +226,6 @@ fn evaluate_expr(context: &mut Context, expr: Expression) -> Result<VariableValu
                         inner_context.define_var(&args[i], values[i].clone())?;
                     }
                     let result = evaluate_expr(&mut inner_context, *body)?;
-
                     context.apply_subcontext(layer, inner_context)?;
                     Ok(result)
                 }
