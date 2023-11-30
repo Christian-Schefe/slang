@@ -1,8 +1,8 @@
 use log::{debug, info};
 
 use crate::{
-    statements::get_statements,
-    structs::{Keyword, Statement, Token},
+    statements::{get_statements, Statement},
+    tokenizer::{Keyword, Token},
     variables::{Operator, VariableValue},
 };
 

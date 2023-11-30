@@ -1,7 +1,96 @@
+use std::fmt::Display;
+
 use log::info;
 
 use crate::*;
 use unescaper::unescape;
+
+#[derive(Debug, Clone)]
+pub enum Token {
+    Keyword(Keyword),
+    Identifier(String),
+    Value(VariableValue),
+    OpeningBrace,
+    ClosingBrace,
+    OpeningParethesis,
+    ClosingParethesis,
+    ClosingBracket,
+    Ampersand,
+    VerticalBar,
+    OpeningBracket,
+    Semicolon,
+    Assign,
+    OperatorAssign(Operator),
+    Comma,
+    Quote,
+    Dot,
+    Operator(Operator),
+}
+
+impl Display for Token {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let stri = match self {
+            Token::Assign => "=".to_string(),
+            Token::OperatorAssign(op) => format!("={}", Token::Operator(*op)),
+            Token::Comma => ",".to_string(),
+            Token::Quote => "\"".to_string(),
+            Token::OpeningBrace => "{".to_string(),
+            Token::ClosingBrace => "}".to_string(),
+            Token::OpeningParethesis => "(".to_string(),
+            Token::ClosingParethesis => ")".to_string(),
+            Token::OpeningBracket => "[".to_string(),
+            Token::ClosingBracket => "]".to_string(),
+            Token::Ampersand => "&".to_string(),
+            Token::VerticalBar => "|".to_string(),
+            Token::Identifier(s) => s.to_string(),
+            Token::Keyword(Keyword::Fn) => "fn".to_string(),
+            Token::Keyword(Keyword::Let) => "let".to_string(),
+            Token::Keyword(Keyword::Return) => "return".to_string(),
+            Token::Keyword(Keyword::While) => "while".to_string(),
+            Token::Keyword(Keyword::For) => "for".to_string(),
+            Token::Keyword(Keyword::If) => "if".to_string(),
+            Token::Keyword(Keyword::Else) => "else".to_string(),
+            Token::Value(v) => v.to_string(),
+            Token::Semicolon => ";".to_string(),
+            Token::Dot => ".".to_string(),
+            Token::Operator(Operator::Add) => "+".to_string(),
+            Token::Operator(Operator::Subtract) => "-".to_string(),
+            Token::Operator(Operator::Multiply) => "*".to_string(),
+            Token::Operator(Operator::Divide) => "/".to_string(),
+            Token::Operator(Operator::Equal) => "==".to_string(),
+            Token::Operator(Operator::LessThan) => "<".to_string(),
+            Token::Operator(Operator::LessThanOrEqual) => "<=".to_string(),
+            Token::Operator(Operator::GreaterThan) => ">".to_string(),
+            Token::Operator(Operator::GreaterThanOrEqual) => ">=".to_string(),
+            Token::Operator(Operator::NotEqual) => "!=".to_string(),
+            Token::Operator(Operator::Not) => "!".to_string(),
+            Token::Operator(Operator::Negate) => "-".to_string(),
+            Token::Operator(Operator::UnaryPlus) => "+".to_string(),
+            Token::Operator(Operator::And) => "&&".to_string(),
+            Token::Operator(Operator::Or) => "||".to_string(),
+            Token::Operator(Operator::Modulo) => "%".to_string(),
+        };
+        f.write_str(&stri)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum Keyword {
+    Let,
+    While,
+    For,
+    Return,
+    Fn,
+    If,
+    Else,
+}
+
+#[derive(Debug, Clone)]
+pub enum CharToken {
+    Char(char),
+    Identifier(String),
+    String(String),
+}
 
 pub fn tokenize(program: &str) -> Result<Vec<Token>, SyntaxError> {
     let char_tokens = preprocess(program.chars().collect());

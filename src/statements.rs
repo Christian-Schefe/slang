@@ -2,6 +2,18 @@ use log::debug;
 
 use crate::*;
 
+#[derive(Debug, Clone)]
+pub enum Statement {
+    VariableDefinition(String, Expression),
+    FunctionDefinition(String, Vec<String>, Expression),
+    VariableAssignment(ReferenceExpr, Expression),
+    OperatorAssignment(ReferenceExpr, Expression, Operator),
+    ReturnStatement(Expression),
+    ExpressionStatement(Expression),
+    WhileLoop(Expression, Expression),
+    ForLoop(Box<(Statement, Statement)>, Expression, Expression),
+    Empty,
+}
 
 pub fn get_statements(tokens: Vec<Token>) -> Result<Vec<Statement>, SyntaxError> {
     let mut block_indent = 0;

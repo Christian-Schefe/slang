@@ -9,13 +9,13 @@ use expressions::*;
 use log::{debug, error, info};
 use rand::Rng;
 use statements::*;
-use structs::*;
+use context::*;
 use tokenizer::*;
 use variables::*;
 
 mod expressions;
 mod statements;
-mod structs;
+mod context;
 mod tokenizer;
 mod variables;
 

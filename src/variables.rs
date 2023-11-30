@@ -60,7 +60,20 @@ impl Display for VariableValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let stri = match self {
             VariableValue::Unit => "()".to_string(),
-            VariableValue::Object(m) => format!("Object({:?})", m),
+            VariableValue::Object(m) => {
+                let mut s = String::new();
+                s.push('{');
+                for (i, (key, val)) in m.variables.iter().enumerate() {
+                    s.push_str(key);
+                    s.push_str(": ");
+                    s.push_str(&val.to_string());
+                    if i + 1 < m.variables.len() {
+                        s.push_str(", ");
+                    }
+                }
+                s.push('}');
+                s
+            }
             VariableValue::Number(n) => n.to_string(),
             VariableValue::Boolean(b) => b.to_string(),
             VariableValue::String(s) => s.to_string(),
