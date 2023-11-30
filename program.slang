@@ -1,7 +1,14 @@
-let a = [0, 1];
-print(a[0]);
-print(a[1]);
+fn modify(ob, x) {
+    ob += x;
+    ob
+};
 
-a.0 = 2;
-print(a[0]);
-print(a[1]);
+let b = [1, 2];
+
+print(b);
+
+modify(b, 5);
+print(b);
+b = modify(b, 5);
+
+print(b);

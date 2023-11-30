@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     env::args,
     fs,
     io::{stdin, stdout, Write},
@@ -72,7 +73,6 @@ fn execute_statement(
     context: &mut Context,
     statement: Statement,
 ) -> Result<VariableValue, RuntimeError> {
-    
     debug!("Execute Stmnt {:?}", statement);
     match statement {
         Statement::Empty => (),
@@ -137,6 +137,7 @@ fn evaluate_expr(context: &mut Context, expr: Expression) -> Result<VariableValu
             let mut inner_context = context.create_block_context()?;
             let result = execute_statements(&mut inner_context, statements)?;
             context.apply_block_context(inner_context)?;
+
             Ok(result)
         }
         Expression::BinaryOperator(l, r, op) => {
@@ -176,6 +177,10 @@ fn evaluate_expr(context: &mut Context, expr: Expression) -> Result<VariableValu
                             values
                         )))
                     };
+                } else if built_in_fn == "obj" {
+                    let mut variables = HashMap::new();
+                    variables.insert("a".to_string(), VariableValue::Number(1));
+                    return Ok(VariableValue::Object(Scope { variables }));
                 } else if built_in_fn == "input" {
                     if let Some(val) = values.first() {
                         print!("{}", val);
@@ -221,6 +226,7 @@ fn evaluate_expr(context: &mut Context, expr: Expression) -> Result<VariableValu
                         inner_context.define_var(&args[i], values[i].clone())?;
                     }
                     let result = evaluate_expr(&mut inner_context, *body)?;
+
                     context.apply_subcontext(layer, inner_context)?;
                     Ok(result)
                 }
@@ -330,7 +336,7 @@ fn set_reference(
                             .get_mut(num as usize)
                             .ok_or(RuntimeError("index out of bounds".to_string()))?;
                         *var = val;
-                        
+
                         set_reference(context, *list_ref, VariableValue::List(list))?;
                         Ok(())
                     }
@@ -341,14 +347,17 @@ fn set_reference(
             }
         }
         ReferenceExpr::Object(obj_ref, var) => {
-            let o = get_reference(context, *obj_ref)?;
+            let o = get_reference(context, *obj_ref.clone())?;
             if let VariableValue::Object(mut obj) = o {
                 obj.try_get_var(&var)
                     .ok_or(RuntimeError("invalid property".to_string()))
                     .and_then(|v| {
                         *v = val;
                         Ok(())
-                    })
+                    })?;
+
+                set_reference(context, *obj_ref, VariableValue::Object(obj))?;
+                Ok(())
             } else {
                 Err(RuntimeError("not an object".to_string()))
             }
