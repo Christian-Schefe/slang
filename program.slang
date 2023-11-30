@@ -1,2 +1,7 @@
-let a = if (true) [if (true) 2 else 1] else [5, 3];
-print(a);
+let a = [0, 1];
+print(a[0]);
+print(a[1]);
+
+a.0 = 2;
+print(a[0]);
+print(a[1]);

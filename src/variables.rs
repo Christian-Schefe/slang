@@ -53,12 +53,14 @@ pub enum VariableValue {
     Unit,
     Function(Vec<String>, Box<Expression>),
     List(Vec<VariableValue>),
+    Object(Scope),
 }
 
 impl Display for VariableValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let stri = match self {
-            VariableValue::Unit => "unit".to_string(),
+            VariableValue::Unit => "()".to_string(),
+            VariableValue::Object(m) => format!("Object({:?})", m),
             VariableValue::Number(n) => n.to_string(),
             VariableValue::Boolean(b) => b.to_string(),
             VariableValue::String(s) => s.to_string(),
@@ -90,6 +92,7 @@ impl VariableValue {
             VariableValue::Function(_, _) => "Function",
             VariableValue::Unit => "Unit",
             VariableValue::String(_) => "String",
+            VariableValue::Object(_) => "Object",
         }
         .to_string()
     }

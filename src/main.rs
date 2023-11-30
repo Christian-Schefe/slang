@@ -4,12 +4,14 @@ use std::{
     io::{stdin, stdout, Write},
 };
 
+use expressions::*;
 use log::{debug, error, info};
 use rand::Rng;
 use structs::*;
 use tokenizer::*;
 use variables::*;
 
+mod expressions;
 mod structs;
 mod tokenizer;
 mod variables;
@@ -70,6 +72,8 @@ fn execute_statement(
     context: &mut Context,
     statement: Statement,
 ) -> Result<VariableValue, RuntimeError> {
+    
+    debug!("Execute Stmnt {:?}", statement);
     match statement {
         Statement::Empty => (),
         Statement::VariableDefinition(s, expr) => {
@@ -83,30 +87,15 @@ fn execute_statement(
         Statement::FunctionDefinition(s, params, expr) => {
             context.define_var(&s, VariableValue::Function(params, Box::new(expr)))?;
         }
-        Statement::VariableAssignment(s, expr) => {
+        Statement::VariableAssignment(var, expr) => {
             let val = evaluate_expr(context, expr)?;
-            context.set_var(&s, val)?;
-        }
-        Statement::ArrayAssignment(s, index_expr, expr) => {
-            let list_val = context.get_var(&s)?;
-            if let VariableValue::List(mut list) = list_val {
-                let i = evaluate_expr(context, index_expr)?;
-                let val = evaluate_expr(context, expr)?;
-                if let VariableValue::Number(index) = i {
-                    list[index as usize] = val;
-                }
-                context.set_var(&s, VariableValue::List(list))?;
-            } else {
-                return Err(RuntimeError(format!(
-                    "Index outside of range: array len is but index is"
-                )));
-            }
+            set_reference(context, var, val)?;
         }
         Statement::OperatorAssignment(s, expr, op) => {
             let val = evaluate_expr(context, expr)?;
-            let var = context.get_var(&s)?;
-            let result = evaluate_binary_op(var, val, op)?;
-            context.set_var(&s, result)?;
+            let var = get_reference(context, s.clone())?;
+            let result = evaluate_binary_op(var.clone(), val, op)?;
+            set_reference(context, s, result)?;
         }
         Statement::WhileLoop(condition, body) => loop {
             let do_iter = evaluate_expr(context, condition.clone())?;
@@ -144,42 +133,6 @@ fn evaluate_expr(context: &mut Context, expr: Expression) -> Result<VariableValu
                 .collect::<Result<Vec<VariableValue>, RuntimeError>>()?;
             Ok(VariableValue::List(list))
         }
-        Expression::Indexing(list_name, index_expr) => {
-            let list_val = context.get_var(&list_name)?;
-            let index_val = evaluate_expr(context, *index_expr)?;
-            match (list_val, index_val) {
-                (VariableValue::List(list), VariableValue::Number(i)) => {
-                    let index: usize = i
-                        .try_into()
-                        .map_err(|_| RuntimeError(format!("Invalid index: {}", i)))?;
-                    list.get(index)
-                        .ok_or(RuntimeError(format!(
-                            "Index outside of range: array len is {} but index is {}",
-                            list.len(),
-                            index
-                        )))
-                        .cloned()
-                }
-                (VariableValue::String(list), VariableValue::Number(i)) => {
-                    let index: usize = i
-                        .try_into()
-                        .map_err(|_| RuntimeError(format!("Invalid index: {}", i)))?;
-                    list.chars()
-                        .nth(index)
-                        .map(|c| VariableValue::String(String::from(c)))
-                        .ok_or(RuntimeError(format!(
-                            "Index outside of range: array len is {} but index is {}",
-                            list.len(),
-                            index
-                        )))
-                }
-                (a, b) => Err(RuntimeError(format!(
-                    "Invalid indexing statement: list of type {}, index {}",
-                    a.get_type(),
-                    b
-                ))),
-            }
-        }
         Expression::Block(statements) => {
             let mut inner_context = context.create_block_context()?;
             let result = execute_statements(&mut inner_context, statements)?;
@@ -195,81 +148,83 @@ fn evaluate_expr(context: &mut Context, expr: Expression) -> Result<VariableValu
             let val = evaluate_expr(context, *expr)?;
             evaluate_unary_op(val, op)
         }
-        Expression::Reference(var_name) => context.get_var(&var_name),
+        Expression::Reference(var) => get_reference(context, var),
         Expression::FunctionCall(function_name, params) => {
             let values: Vec<VariableValue> = params
                 .into_iter()
                 .map(|p| evaluate_expr(context, p))
                 .collect::<Result<Vec<VariableValue>, RuntimeError>>()?;
-            if function_name == "print" {
-                for val in values {
-                    print!("{} ", val);
+            if let ReferenceExpr::Variable(ref built_in_fn) = function_name {
+                if built_in_fn == "print" {
+                    for val in values {
+                        print!("{} ", val);
+                    }
+                    println!();
+                    return Ok(VariableValue::Unit);
+                } else if built_in_fn == "random" {
+                    return if let (
+                        Some(VariableValue::Number(start)),
+                        Some(VariableValue::Number(end)),
+                    ) = (values.get(0), values.get(1))
+                    {
+                        let mut rng = rand::thread_rng();
+                        let val = rng.gen_range(*start..*end);
+                        Ok(VariableValue::Number(val))
+                    } else {
+                        Err(RuntimeError(format!(
+                            "Invalid arguments for 'rand': {:?}",
+                            values
+                        )))
+                    };
+                } else if built_in_fn == "input" {
+                    if let Some(val) = values.first() {
+                        print!("{}", val);
+                    }
+                    stdout()
+                        .flush()
+                        .map_err(|e| RuntimeError(format!("{}", e)))?;
+                    let mut input = String::new();
+                    stdin()
+                        .read_line(&mut input)
+                        .map_err(|e| RuntimeError(format!("{}", e)))?;
+                    return Ok(VariableValue::String(input.trim_end().to_owned()));
+                } else if built_in_fn == "int" {
+                    return if let Some(VariableValue::String(s)) = values.first() {
+                        Ok(VariableValue::Number(str::parse(s.trim()).map_err(
+                            |_| {
+                                RuntimeError(format!(
+                                    "invalid arguments to function 'int': {:?}",
+                                    values
+                                ))
+                            },
+                        )?))
+                    } else {
+                        Err(RuntimeError(
+                            "invalid arguments to function 'int'".to_owned(),
+                        ))
+                    };
+                } else if built_in_fn == "len" {
+                    return if let Some(VariableValue::List(list)) = values.first() {
+                        Ok(VariableValue::Number(list.len() as i32))
+                    } else {
+                        Err(RuntimeError(
+                            "invalid arguments to function 'len'".to_owned(),
+                        ))
+                    };
                 }
-                println!();
-                Ok(VariableValue::Unit)
-            } else if function_name == "random" {
-                if let (Some(VariableValue::Number(start)), Some(VariableValue::Number(end))) =
-                    (values.get(0), values.get(1))
-                {
-                    let mut rng = rand::thread_rng();
-                    let val = rng.gen_range(*start..*end);
-                    Ok(VariableValue::Number(val))
-                } else {
-                    Err(RuntimeError(format!(
-                        "Invalid arguments for 'rand': {:?}",
-                        values
-                    )))
+            }
+            let (layer, func) = get_reference_and_layer(context, function_name)?;
+            match func {
+                VariableValue::Function(args, body) => {
+                    let mut inner_context = context.create_subcontext(layer)?;
+                    for i in 0..values.len() {
+                        inner_context.define_var(&args[i], values[i].clone())?;
+                    }
+                    let result = evaluate_expr(&mut inner_context, *body)?;
+                    context.apply_subcontext(layer, inner_context)?;
+                    Ok(result)
                 }
-            } else if function_name == "input" {
-                if let Some(val) = values.first() {
-                    print!("{}", val);
-                }
-                stdout()
-                    .flush()
-                    .map_err(|e| RuntimeError(format!("{}", e)))?;
-                let mut input = String::new();
-                stdin()
-                    .read_line(&mut input)
-                    .map_err(|e| RuntimeError(format!("{}", e)))?;
-                Ok(VariableValue::String(input.trim_end().to_owned()))
-            } else if function_name == "int" {
-                if let Some(VariableValue::String(s)) = values.first() {
-                    Ok(VariableValue::Number(str::parse(s.trim()).map_err(
-                        |_| {
-                            RuntimeError(format!(
-                                "invalid arguments to function 'int': {:?}",
-                                values
-                            ))
-                        },
-                    )?))
-                } else {
-                    Err(RuntimeError(
-                        "invalid arguments to function 'int'".to_owned(),
-                    ))
-                }
-            } else if function_name == "len" {
-                if let Some(VariableValue::List(list)) = values.first() {
-                    Ok(VariableValue::Number(list.len() as i32))
-                } else {
-                    Err(RuntimeError(
-                        "invalid arguments to function 'len'".to_owned(),
-                    ))
-                }
-            } else if let Some((_, VariableValue::Function(args, body))) =
-                context.try_get_var(&function_name)
-            {
-                let mut inner_context = context.create_fn_context(&function_name)?;
-                for i in 0..values.len() {
-                    inner_context.define_var(&args[i], values[i].clone())?;
-                }
-                let result = evaluate_expr(&mut inner_context, *body)?;
-                context.apply_fn_context(&function_name, inner_context)?;
-                Ok(result)
-            } else {
-                Err(RuntimeError(format!(
-                    "Function '{}' does not exist",
-                    function_name
-                )))
+                _ => Err(RuntimeError(format!("{} is not a function", func))),
             }
         }
         Expression::IfElse(condition, if_body, maybe_else_body) => {
@@ -314,5 +269,89 @@ fn evaluate_unary_op(a: VariableValue, op: Operator) -> Result<VariableValue, Ru
         Operator::Negate => VariableValue::negate(a),
         Operator::UnaryPlus => VariableValue::unary_plus(a),
         _ => Err(RuntimeError(format!("{:?} is not a unary operator!", op))),
+    }
+}
+
+fn get_reference(
+    context: &mut Context,
+    expr: ReferenceExpr,
+) -> Result<VariableValue, RuntimeError> {
+    get_reference_and_layer(context, expr).map(|(_, v)| v)
+}
+
+fn get_reference_and_layer(
+    context: &mut Context,
+    expr: ReferenceExpr,
+) -> Result<(usize, VariableValue), RuntimeError> {
+    match expr {
+        ReferenceExpr::Variable(var) => context.get_var(&var).map(|(a, b)| (a, b.clone())),
+        ReferenceExpr::Index(list_ref, index_expr) => {
+            let i = evaluate_expr(context, *index_expr)?;
+            let (layer, l) = get_reference_and_layer(context, *list_ref)?;
+            if let VariableValue::List(list) = l {
+                match i {
+                    VariableValue::Number(num) => list
+                        .get(num as usize)
+                        .ok_or(RuntimeError("index out of bounds".to_string()))
+                        .map(|v| (layer, v.clone())),
+                    _ => Err(RuntimeError("invalid index type".to_string())),
+                }
+            } else {
+                Err(RuntimeError("not a list".to_string()))
+            }
+        }
+        ReferenceExpr::Object(obj_ref, var) => {
+            let (layer, o) = get_reference_and_layer(context, *obj_ref)?;
+            if let VariableValue::Object(mut obj) = o {
+                obj.try_get_var(&var)
+                    .ok_or(RuntimeError("invalid property".to_string()))
+                    .map(|v| (layer, v.clone()))
+            } else {
+                Err(RuntimeError("not an object".to_string()))
+            }
+        }
+    }
+}
+
+fn set_reference(
+    context: &mut Context,
+    expr: ReferenceExpr,
+    val: VariableValue,
+) -> Result<(), RuntimeError> {
+    match expr {
+        ReferenceExpr::Variable(var) => context.set_var(&var, val),
+        ReferenceExpr::Index(list_ref, index_expr) => {
+            let i = evaluate_expr(context, *index_expr)?;
+            let l = get_reference(context, *list_ref.clone())?;
+            if let VariableValue::List(mut list) = l {
+                match i {
+                    VariableValue::Number(num) => {
+                        let var = list
+                            .get_mut(num as usize)
+                            .ok_or(RuntimeError("index out of bounds".to_string()))?;
+                        *var = val;
+                        
+                        set_reference(context, *list_ref, VariableValue::List(list))?;
+                        Ok(())
+                    }
+                    _ => Err(RuntimeError("invalid index type".to_string())),
+                }
+            } else {
+                Err(RuntimeError("not a list".to_string()))
+            }
+        }
+        ReferenceExpr::Object(obj_ref, var) => {
+            let o = get_reference(context, *obj_ref)?;
+            if let VariableValue::Object(mut obj) = o {
+                obj.try_get_var(&var)
+                    .ok_or(RuntimeError("invalid property".to_string()))
+                    .and_then(|v| {
+                        *v = val;
+                        Ok(())
+                    })
+            } else {
+                Err(RuntimeError("not an object".to_string()))
+            }
+        }
     }
 }

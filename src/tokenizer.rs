@@ -314,20 +314,6 @@ fn get_statement(t: Vec<Token>) -> Result<Statement, SyntaxError> {
                 }
             }
         }
-        if let Some(Token::Identifier(s)) = t.get(0) {
-            if let Some(Token::Assign) = t.get(1) {
-                if let Some(expr) = try_get_expr(t[2..].to_vec()) {
-                    return Ok(Statement::VariableAssignment(s.to_string(), expr));
-                }
-            } else if let Some(Token::OperatorAssign(op)) = t.get(1) {
-                if let Some(expr) = try_get_expr(t[2..].to_vec()) {
-                    return Ok(Statement::OperatorAssignment(s.to_string(), expr, *op));
-                }
-            }
-        }
-        if let Some(stmnt) = try_get_array_index_assignment(t.clone()) {
-            return Ok(stmnt);
-        }
         if let Some(Token::Keyword(Keyword::Return)) = t.get(0) {
             if t.len() == 1 {
                 return Ok(Statement::ReturnStatement(Expression::Value(
@@ -337,6 +323,9 @@ fn get_statement(t: Vec<Token>) -> Result<Statement, SyntaxError> {
             if let Some(expr) = try_get_expr(t[1..].to_vec()) {
                 return Ok(Statement::ReturnStatement(expr));
             }
+        }
+        if let Some(stmnt) = try_get_assignment(t.clone()) {
+            return Ok(stmnt);
         }
         if let Some(stmnt) = try_get_while_loop(t.clone()) {
             return Ok(stmnt);
@@ -354,9 +343,10 @@ fn get_statement(t: Vec<Token>) -> Result<Statement, SyntaxError> {
     }
 }
 
-fn try_get_array_index_assignment(t: Vec<Token>) -> Option<Statement> {
+fn try_get_assignment(t: Vec<Token>) -> Option<Statement> {
     let mut indent_depth = 0;
-    let mut assign_op = None;
+    let mut assign_pos = None;
+    let mut opassign_pos = None;
 
     for i in 0..t.len() {
         match &t[i] {
@@ -380,7 +370,13 @@ fn try_get_array_index_assignment(t: Vec<Token>) -> Option<Statement> {
             }
             Token::Assign => {
                 if indent_depth == 0 {
-                    assign_op = Some(i);
+                    assign_pos = Some(i);
+                    break;
+                }
+            }
+            Token::OperatorAssign(op) => {
+                if indent_depth == 0 {
+                    opassign_pos = Some((i, op));
                     break;
                 }
             }
@@ -388,16 +384,29 @@ fn try_get_array_index_assignment(t: Vec<Token>) -> Option<Statement> {
         }
     }
 
-    if let Some(assign_pos) = assign_op {
-        if let (Some(Expression::Indexing(arr, index_expr)), Some(expr)) = (
-            try_get_expr(t[..assign_pos].to_vec()),
-            try_get_expr(t[assign_pos + 1..].to_vec()),
-        ) {
-            return Some(Statement::ArrayAssignment(arr, *index_expr, expr));
+    if let Some(pos) = assign_pos {
+        let maybe_ref_expr = try_get_expr(t[..pos].to_vec());
+        let maybe_val_expr = try_get_expr(t[pos + 1..].to_vec());
+        if let (Some(Expression::Reference(ref_expr)), Some(val_expr)) =
+            (maybe_ref_expr, maybe_val_expr)
+        {
+            Some(Statement::VariableAssignment(ref_expr, val_expr))
+        } else {
+            None
         }
+    } else if let Some((pos, op)) = opassign_pos {
+        let maybe_ref_expr = try_get_expr(t[..pos].to_vec());
+        let maybe_val_expr = try_get_expr(t[pos + 1..].to_vec());
+        if let (Some(Expression::Reference(ref_expr)), Some(val_expr)) =
+            (maybe_ref_expr, maybe_val_expr)
+        {
+            Some(Statement::OperatorAssignment(ref_expr, val_expr, *op))
+        } else {
+            None
+        }
+    } else {
+        None
     }
-
-    None
 }
 
 fn try_get_function_definition_statement(t: Vec<Token>) -> Option<Statement> {
@@ -526,7 +535,7 @@ fn try_get_expr(t: Vec<Token>) -> Option<Expression> {
         if let Some(Token::Value(val)) = t.get(0) {
             Some(Expression::Value(val.clone()))
         } else if let Some(Token::Identifier(val)) = t.get(0) {
-            Some(Expression::Reference(val.clone()))
+            Some(Expression::Reference(ReferenceExpr::Variable(val.clone())))
         } else {
             None
         }
@@ -550,6 +559,40 @@ fn try_get_expr(t: Vec<Token>) -> Option<Expression> {
     info!("Get Expr: {:?} -> {:?}", t, r);
     r
 }
+
+// fn try_get_object_access(t: Vec<Token>) -> Option<Expression> {
+//     let mut dots = Vec::new();
+//     let mut indent_depth = 0;
+
+//     for i in 1..t.len() - 1 {
+//         match &t[i] {
+//             Token::OpeningBrace => indent_depth += 1,
+//             Token::OpeningParethesis => indent_depth += 1,
+//             Token::OpeningBracket => indent_depth += 1,
+
+//             Token::ClosingBrace => indent_depth -= 1,
+//             Token::ClosingParethesis => indent_depth -= 1,
+//             Token::ClosingBracket => indent_depth -= 1,
+//             Token::Comma => {
+//                 if indent_depth == 0 {
+//                     dots.push(i);
+//                 }
+//             }
+//             _ => (),
+//         }
+//     }
+
+//     if let Some(opening_i) = dot_pos {
+//         if let (Some(Expression::Reference(list)), Some(index_expr)) = (
+//             try_get_expr(t[..opening_i].to_vec()),
+//             try_get_expr(t[opening_i + 1..t.len() - 1].to_vec()),
+//         ) {
+//             return Some(Expression::Indexing(list, Box::new(index_expr)));
+//         }
+//     }
+
+//     None
+// }
 
 fn try_get_array_access(t: Vec<Token>) -> Option<Expression> {
     if !matches!(t.last(), Some(Token::ClosingBracket)) {
@@ -580,7 +623,10 @@ fn try_get_array_access(t: Vec<Token>) -> Option<Expression> {
             try_get_expr(t[..opening_i].to_vec()),
             try_get_expr(t[opening_i + 1..t.len() - 1].to_vec()),
         ) {
-            return Some(Expression::Indexing(list, Box::new(index_expr)));
+            return Some(Expression::Reference(ReferenceExpr::Index(
+                Box::new(list),
+                Box::new(index_expr),
+            )));
         }
     }
 
@@ -850,7 +896,10 @@ fn try_get_function_expr(t: Vec<Token>) -> Option<Expression> {
             if params.len() == 0 && t.len() > 3 {
                 return None;
             } else {
-                return Some(Expression::FunctionCall(s.clone(), params));
+                return Some(Expression::FunctionCall(
+                    ReferenceExpr::Variable(s.clone()),
+                    params,
+                ));
             }
         }
     }

@@ -3,7 +3,10 @@ use std::{
     fmt::{Debug, Display},
 };
 
-use crate::variables::*;
+use crate::{
+    expressions::{Expression, ReferenceExpr},
+    variables::*,
+};
 
 #[derive(Debug, Clone)]
 pub enum Token {
@@ -93,25 +96,11 @@ pub enum CharToken {
 }
 
 #[derive(Debug, Clone)]
-pub enum Expression {
-    Value(VariableValue),
-    List(Vec<Expression>),
-    Reference(String),
-    BinaryOperator(Box<Expression>, Box<Expression>, Operator),
-    UnaryOperator(Box<Expression>, Operator),
-    Block(Vec<Statement>),
-    FunctionCall(String, Vec<Expression>),
-    IfElse(Box<Expression>, Box<Expression>, Option<Box<Expression>>),
-    Indexing(String, Box<Expression>),
-}
-
-#[derive(Debug, Clone)]
 pub enum Statement {
     VariableDefinition(String, Expression),
-    VariableAssignment(String, Expression),
-    ArrayAssignment(String, Expression, Expression),
-    OperatorAssignment(String, Expression, Operator),
     FunctionDefinition(String, Vec<String>, Expression),
+    VariableAssignment(ReferenceExpr, Expression),
+    OperatorAssignment(ReferenceExpr, Expression, Operator),
     ReturnStatement(Expression),
     ExpressionStatement(Expression),
     WhileLoop(Expression, Expression),
@@ -138,9 +127,9 @@ impl Context {
         self.current_scope().define_var(var, val)
     }
 
-    pub fn try_get_var(&self, var: &String) -> Option<(usize, VariableValue)> {
+    pub fn try_get_var(&mut self, var: &String) -> Option<(usize, &mut VariableValue)> {
         self.layers
-            .iter()
+            .iter_mut()
             .enumerate()
             .rev()
             .find_map(|(i, layer)| layer.try_get_var(var).map(|v| (i, v)))
@@ -153,67 +142,44 @@ impl Context {
             .find_map(|layer| layer.try_set_var(var, val.clone()))
     }
 
-    pub fn get_var(&self, var: &String) -> Result<VariableValue, RuntimeError> {
+    pub fn get_var(&mut self, var: &String) -> Result<(usize, &mut VariableValue), RuntimeError> {
         self.try_get_var(var)
-            .map(|(_, v)| v)
-            .ok_or(RuntimeError(format!("Variable '{}' does not exist", var)))
-    }
-
-    pub fn get_var_layer(&self, var: &String) -> Result<usize, RuntimeError> {
-        self.try_get_var(var)
-            .map(|(i, _)| i)
-            .ok_or(RuntimeError(format!("Variable '{}' does not exist", var)))
+            .ok_or(RuntimeError(format!("Variable '{:?}' does not exist", var)))
     }
 
     pub fn set_var(&mut self, var: &String, val: VariableValue) -> Result<(), RuntimeError> {
         self.try_set_var(var, val)
-            .ok_or(RuntimeError(format!("Variable '{}' does not exist", var)))
+            .ok_or(RuntimeError(format!("Variable '{:?}' does not exist", var)))
     }
 
-    pub fn create_fn_context(&self, var: &String) -> Result<Context, RuntimeError> {
-        let i = self.get_var_layer(var)?;
-        let mut new_layers = self.layers[0..i + 1].to_vec();
+    pub fn create_subcontext(&self, layer: usize) -> Result<Context, RuntimeError> {
+        let mut new_layers = self.layers[0..layer + 1].to_vec();
         new_layers.push(Scope::new());
         Ok(Context {
             layers: new_layers,
-            cur_layer: i + 1,
+            cur_layer: layer + 1,
         })
+    }
+
+    pub fn apply_subcontext(&mut self, layer: usize, context: Context) -> Result<(), RuntimeError> {
+        for scope_i in 0..layer + 1 {
+            let scope_to_update = &mut self.layers[scope_i];
+            let updated_scope = &context.layers[scope_i];
+            for (key, val) in &updated_scope.variables {
+                scope_to_update
+                    .try_set_var(key, val.clone())
+                    .ok_or(RuntimeError(format!("Error applying context")))?;
+            }
+        }
+        Ok(())
     }
 
     pub fn create_block_context(&self) -> Result<Context, RuntimeError> {
-        let i = self.cur_layer;
-        let mut new_layers = self.layers[0..i + 1].to_vec();
-        new_layers.push(Scope::new());
-        Ok(Context {
-            layers: new_layers,
-            cur_layer: i + 1,
-        })
-    }
-
-    pub fn apply_fn_context(&mut self, var: &String, context: Context) -> Result<(), RuntimeError> {
-        let i = self.get_var_layer(var)?;
-        for scope_i in 0..i + 1 {
-            let s = &mut self.layers[scope_i];
-            let s2 = &context.layers[scope_i];
-            for (key, val) in &s2.variables {
-                s.try_set_var(key, val.clone())
-                    .ok_or(RuntimeError(format!("Error applying context")))?;
-            }
-        }
-        Ok(())
+        self.create_subcontext(self.cur_layer)
     }
 
     pub fn apply_block_context(&mut self, context: Context) -> Result<(), RuntimeError> {
-        let i = self.cur_layer;
-        for scope_i in 0..i + 1 {
-            let s = &mut self.layers[scope_i];
-            let s2 = &context.layers[scope_i];
-            for (key, val) in &s2.variables {
-                s.try_set_var(key, val.clone())
-                    .ok_or(RuntimeError(format!("Error applying context")))?;
-            }
-        }
-        Ok(())
+        self.apply_subcontext(self.cur_layer, context)
     }
 }
 
@@ -231,8 +197,8 @@ impl Scope {
         Ok(())
     }
 
-    pub fn try_get_var(&self, var: &String) -> Option<VariableValue> {
-        self.variables.get(var).cloned()
+    pub fn try_get_var(&mut self, var: &String) -> Option<&mut VariableValue> {
+        self.variables.get_mut(var)
     }
 
     pub fn try_set_var(&mut self, var: &String, val: VariableValue) -> Option<()> {
