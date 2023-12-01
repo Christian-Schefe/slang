@@ -1,3 +1,5 @@
+use std::fs;
+
 use crate::{
     context::RuntimeError, execute_function, expressions::ReferenceExpr, set_reference,
     variables::VariableValue, Context,
@@ -11,6 +13,8 @@ pub fn try_get_builtin_function(
     if match (&target, function_name.as_str()) {
         (Some(VariableValue::String(_)), "split") => true,
         (Some(VariableValue::String(_)), "len") => true,
+        (Some(VariableValue::String(_)), "trim") => true,
+        (Some(VariableValue::String(_)), "lines") => true,
         (Some(VariableValue::List(_)), "map") => true,
         (Some(VariableValue::List(_)), "filter") => true,
         (Some(VariableValue::List(_)), "len") => true,
@@ -18,6 +22,7 @@ pub fn try_get_builtin_function(
         (Some(VariableValue::List(_)), "concat") => true,
         (None, "print") => true,
         (None, "typeof") => true,
+        (None, "read_file") => true,
         (_, _) => false,
     } {
         Some(VariableValue::BuiltinFunction(
@@ -42,6 +47,12 @@ pub fn execute_builtin_function(
         Some(VariableValue::String(s)) => match function_name.as_str() {
             "len" => Ok(VariableValue::Number(s.len() as i32)),
             "split" => string_split(s, params),
+            "trim" => Ok(VariableValue::String(s.trim().to_string())),
+            "lines" => Ok(VariableValue::List(
+                s.lines()
+                    .map(|v| VariableValue::String(v.to_string()))
+                    .collect(),
+            )),
             _ => Err(RuntimeError("???".to_string())),
         },
         Some(VariableValue::List(l)) => match function_name.as_str() {
@@ -55,9 +66,20 @@ pub fn execute_builtin_function(
         None => match function_name.as_str() {
             "print" => print(params),
             "typeof" => print_type(params),
+            "read_file" => read_file(params),
             _ => Err(RuntimeError("???".to_string())),
         },
         _ => Err(RuntimeError("???".to_string())),
+    }
+}
+
+fn read_file(params: Vec<VariableValue>) -> Result<VariableValue, RuntimeError> {
+    let var = params.get(0).ok_or(RuntimeError("???".to_string()))?;
+    if let VariableValue::String(file_path) = var {
+        let val = fs::read_to_string(file_path).map_err(|e| RuntimeError(e.to_string()))?;
+        Ok(VariableValue::String(val))
+    } else {
+        Err(RuntimeError("File Path must be string".to_string()))
     }
 }
 
