@@ -52,7 +52,7 @@ pub enum VariableValue {
     String(String),
     Unit,
     Function(Vec<String>, Box<Expression>),
-    BuiltinFunction(Option<Box<VariableValue>>, String),
+    BuiltinFunction(Option<Box<VariableValue>>, Option<ReferenceExpr>, String),
     List(Vec<VariableValue>),
     Object(Scope),
 }
@@ -77,7 +77,7 @@ impl Display for VariableValue {
             }
             VariableValue::Number(n) => n.to_string(),
             VariableValue::Boolean(b) => b.to_string(),
-            VariableValue::BuiltinFunction(b, s) => format!("{:?} - {:?}", b, s),
+            VariableValue::BuiltinFunction(b, s, _) => format!("{:?} - {:?}", b, s),
             VariableValue::String(s) => format!("\"{}\"", s),
             VariableValue::Function(args, expr) => format!("{:?} -> {:?}", args, expr),
             VariableValue::List(list) => {
@@ -99,18 +99,19 @@ impl Display for VariableValue {
 }
 
 impl VariableValue {
-    // pub fn get_type(&self) -> String {
-    //     match self {
-    //         VariableValue::Boolean(_) => "Boolean",
-    //         VariableValue::Number(_) => "Number",
-    //         VariableValue::List(_) => "List",
-    //         VariableValue::Function(_, _) => "Function",
-    //         VariableValue::Unit => "Unit",
-    //         VariableValue::String(_) => "String",
-    //         VariableValue::Object(_) => "Object",
-    //     }
-    //     .to_string()
-    // }
+    pub fn get_type(&self) -> String {
+        match self {
+            VariableValue::Boolean(_) => "Boolean",
+            VariableValue::Number(_) => "Number",
+            VariableValue::List(_) => "List",
+            VariableValue::Function(_, _) => "Function",
+            VariableValue::BuiltinFunction(_, _, _) => "Function",
+            VariableValue::Unit => "Unit",
+            VariableValue::String(_) => "String",
+            VariableValue::Object(_) => "Object",
+        }
+        .to_string()
+    }
     pub fn add(a: VariableValue, b: VariableValue) -> Result<VariableValue, RuntimeError> {
         match (a, b) {
             (Self::Number(na), Self::Number(nb)) => Ok(VariableValue::Number(na + nb)),

@@ -516,6 +516,12 @@ pub fn try_get_function_expr(t: Vec<Token>) -> Option<Expression> {
                         Token::ClosingParethesis => {
                             indent_level -= 1;
                         }
+                        Token::OpeningBracket => {
+                            indent_level += 1;
+                        }
+                        Token::ClosingBracket => {
+                            indent_level -= 1;
+                        }
                         _ => (),
                     }
                 }

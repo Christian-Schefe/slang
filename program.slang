@@ -1,14 +1,4 @@
-fn for_each(arr, callback) {
-    let l = arr.len();
-    for (let i = 0; i < l; i += 1) {
-        callback(arr[i]);
-    };
-};
+let list = [2, 2];
+list.push(3);
 
-fn what() let x = 5;
-
-what();
-
-let y = 0;
-y+= 5;
-print(y);
+print(list);

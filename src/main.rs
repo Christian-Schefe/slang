@@ -152,14 +152,21 @@ fn evaluate_expr(context: &mut Context, expr: Expression) -> Result<VariableValu
                 .into_iter()
                 .map(|p| evaluate_expr(context, p))
                 .collect::<Result<Vec<VariableValue>, RuntimeError>>()?;
-            let (layer, func) = get_reference_and_layer(context, function_name)?;
+            let (layer, func) = get_reference_and_layer(context, function_name.clone())?;
 
             match func {
                 VariableValue::Function(args, body) => {
                     execute_function(context, args, *body, values, layer)
                 }
-                VariableValue::BuiltinFunction(target, name) => {
-                    execute_builtin_function(context, target.map(|b| *b), name, values, layer)
+                VariableValue::BuiltinFunction(target, target_ref, name) => {
+                    execute_builtin_function(
+                        context,
+                        target.map(|b| *b),
+                        target_ref,
+                        name,
+                        values,
+                        layer,
+                    )
                 }
                 _ => Err(RuntimeError(format!("{} is not a function", func))),
             }
@@ -221,10 +228,16 @@ fn get_reference_and_layer(
     expr: ReferenceExpr,
 ) -> Result<(usize, VariableValue), RuntimeError> {
     match expr {
-        ReferenceExpr::Variable(var) => context
-            .get_var(&var)
-            .map(|(a, b)| (a, b.clone()))
-            .or_else(|e| try_get_builtin_function(None, var).ok_or(e).map(|v| (0, v))),
+        ReferenceExpr::Variable(var) => {
+            context
+                .get_var(&var)
+                .map(|(a, b)| (a, b.clone()))
+                .or_else(|e| {
+                    try_get_builtin_function(None, None, var)
+                        .ok_or(e)
+                        .map(|v| (0, v))
+                })
+        }
         ReferenceExpr::Index(list_ref, index_expr) => {
             let i = evaluate_expr(context, *index_expr)?;
             let (layer, l) = get_reference_and_layer(context, *list_ref)?;
@@ -241,13 +254,13 @@ fn get_reference_and_layer(
             }
         }
         ReferenceExpr::Object(obj_ref, var) => {
-            let (layer, o) = get_reference_and_layer(context, *obj_ref)?;
+            let (layer, o) = get_reference_and_layer(context, *obj_ref.clone())?;
             if let VariableValue::Object(mut obj) = o {
                 obj.try_get_var(&var)
                     .ok_or(RuntimeError("invalid property".to_string()))
                     .map(|v| (layer, v.clone()))
             } else {
-                try_get_builtin_function(Some(o), var)
+                try_get_builtin_function(Some(o), Some(*obj_ref), var)
                     .ok_or(RuntimeError("not an object (get)".to_string()))
                     .map(|v| (layer, v))
             }

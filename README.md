@@ -59,6 +59,8 @@ print(x); # prints 'hello world'
 fn my_function(a, b) {
     return a + b;
 }
+
+let my_closure = |a, b| a + b;
 ```
 
 ### If-Else Clause
