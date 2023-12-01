@@ -263,7 +263,7 @@ fn get_reference_and_layer(
                     .map(|v| (layer, v.clone()))
             } else {
                 try_get_builtin_function(Some(o), var)
-                    .ok_or(RuntimeError("not an object".to_string()))
+                    .ok_or(RuntimeError("not an object (get)".to_string()))
                     .map(|v| (layer, v))
             }
         }
@@ -310,7 +310,7 @@ fn set_reference(
                 set_reference(context, *obj_ref, VariableValue::Object(obj))?;
                 Ok(())
             } else {
-                Err(RuntimeError("not an object".to_string()))
+                Err(RuntimeError("not an object (set)".to_string()))
             }
         }
     }
@@ -323,11 +323,15 @@ fn execute_function(
     values: Vec<VariableValue>,
     layer: usize,
 ) -> Result<VariableValue, RuntimeError> {
-    let mut inner_context = context.create_subcontext(layer)?;
-    for i in 0..values.len() {
-        inner_context.define_var(&args[i], values[i].clone())?;
+    if values.len() == args.len() {
+        let mut inner_context = context.create_subcontext(layer)?;
+        for i in 0..values.len() {
+            inner_context.define_var(&args[i], values[i].clone())?;
+        }
+        let result = evaluate_expr(&mut inner_context, body)?;
+        context.apply_subcontext(layer, inner_context)?;
+        Ok(result)
+    } else {
+        Err(RuntimeError("Argument amount doesn't match".to_string()))
     }
-    let result = evaluate_expr(&mut inner_context, body)?;
-    context.apply_subcontext(layer, inner_context)?;
-    Ok(result)
 }

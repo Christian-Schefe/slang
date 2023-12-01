@@ -78,7 +78,7 @@ impl Display for VariableValue {
             VariableValue::Number(n) => n.to_string(),
             VariableValue::Boolean(b) => b.to_string(),
             VariableValue::BuiltinFunction(b, s) => format!("{:?} - {:?}", b, s),
-            VariableValue::String(s) => s.to_string(),
+            VariableValue::String(s) => format!("\"{}\"", s),
             VariableValue::Function(args, expr) => format!("{:?} -> {:?}", args, expr),
             VariableValue::List(list) => {
                 let mut s = String::new();

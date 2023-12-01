@@ -6,7 +6,10 @@ pub fn try_get_builtin_function(
 ) -> Option<VariableValue> {
     if match (&target, function_name.as_str()) {
         (Some(VariableValue::String(_)), "split") => true,
+        (Some(VariableValue::String(_)), "len") => true,
         (Some(VariableValue::List(_)), "map") => true,
+        (Some(VariableValue::List(_)), "filter") => true,
+        (Some(VariableValue::List(_)), "len") => true,
         (None, "print") => true,
         (_, _) => false,
     } {
@@ -28,11 +31,14 @@ pub fn execute_builtin_function(
 ) -> Result<VariableValue, RuntimeError> {
     match target {
         Some(VariableValue::String(s)) => match function_name.as_str() {
+            "len" => Ok(VariableValue::Number(s.len() as i32)),
             "split" => string_split(s, params),
             _ => Err(RuntimeError("???".to_string())),
         },
         Some(VariableValue::List(l)) => match function_name.as_str() {
+            "len" => Ok(VariableValue::Number(l.len() as i32)),
             "map" => list_map(context, l, params, layer),
+            "filter" => list_filter(context, l, params, layer),
             _ => Err(RuntimeError("???".to_string())),
         },
         None => match function_name.as_str() {
@@ -73,7 +79,66 @@ fn list_map(
             Ok(VariableValue::List(new_list))
         }
         _ => Err(RuntimeError(
-            "Incorrect arguments for function 'string.split'".to_string(),
+            "Incorrect arguments for function 'list.map'".to_string(),
+        )),
+    }
+}
+
+fn list_filter(
+    context: &mut Context,
+    target: Vec<VariableValue>,
+    params: Vec<VariableValue>,
+    layer: usize,
+) -> Result<VariableValue, RuntimeError> {
+    match params.get(0) {
+        Some(VariableValue::Function(args, body)) => {
+            let new_list = target
+                .into_iter()
+                .filter_map(|el| {
+                    execute_function(
+                        context,
+                        args.clone(),
+                        *body.clone(),
+                        vec![el.clone()],
+                        layer,
+                    )
+                    .map(|r| {
+                        if let VariableValue::Boolean(true) = r {
+                            Some(Ok(el))
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or_else(|e| Some(Err(e)))
+                })
+                .collect::<Result<Vec<VariableValue>, RuntimeError>>()?;
+            Ok(VariableValue::List(new_list))
+        }
+        Some(VariableValue::BuiltinFunction(target2, name)) => {
+            let new_list = target
+                .into_iter()
+                .filter_map(|el| {
+                    execute_builtin_function(
+                        context,
+                        target2.clone().map(|b| *b),
+                        name.to_string(),
+                        vec![el.clone()],
+                        layer,
+                    )
+                    .map(|r| {
+                        if let VariableValue::Boolean(true) = r {
+                            Some(Ok(el))
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or_else(|e| Some(Err(e)))
+                })
+                .collect::<Result<Vec<VariableValue>, RuntimeError>>()?;
+            Ok(VariableValue::List(new_list))
+        }
+        _ => Err(RuntimeError(
+            "Incorrect arguments for function 'list.filter'".to_string(),
         )),
     }
 }
