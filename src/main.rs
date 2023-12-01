@@ -230,16 +230,10 @@ fn get_reference_and_layer(
     expr: ReferenceExpr,
 ) -> Result<(usize, VariableValue), RuntimeError> {
     match expr {
-        ReferenceExpr::Variable(var) => {
-            context
-                .get_var(&var)
-                .map(|(a, b)| (a, b.clone()))
-                .or_else(|_e| {
-                    try_get_builtin_function(None, var)
-                        .ok_or(RuntimeError("not a global builtin func".to_string()))
-                        .map(|v| (0, v))
-                })
-        }
+        ReferenceExpr::Variable(var) => context
+            .get_var(&var)
+            .map(|(a, b)| (a, b.clone()))
+            .or_else(|e| try_get_builtin_function(None, var).ok_or(e).map(|v| (0, v))),
         ReferenceExpr::Index(list_ref, index_expr) => {
             let i = evaluate_expr(context, *index_expr)?;
             let (layer, l) = get_reference_and_layer(context, *list_ref)?;

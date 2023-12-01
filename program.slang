@@ -1,10 +1,12 @@
-let var = {val1: ["where are you", "hello world"] + ["where are you", "hello world"]};
+fn for_each(arr, callback) {
+    let l = arr.len();
+    for (let i = 0; i < l; i += 1) {
+        callback(arr[i]);
+    };
+};
 
-fn exec(var, func) func(var);
+fn what() let x = 5;
 
-let b = var.val1.map({ fn mod(el) exec(" ", el.split); mod });
-var.val1.map(print);
-let c = var.val1.filter({ fn mod(el) el.len() >= 11; mod });
+what();
 
-print(b);
-print(c);
+print(x);

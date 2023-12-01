@@ -4,7 +4,7 @@ use log::{debug, info};
 
 use crate::{
     context::Scope,
-    statements::{get_statements, Statement},
+    statements::{get_statement, get_statements, Statement},
     tokenizer::{Keyword, Token},
     variables::{Operator, VariableValue},
 };
@@ -40,6 +40,8 @@ pub fn try_get_expr(t: Vec<Token>) -> Option<Expression> {
         } else {
             None
         }
+    } else if let Some(expr) = try_get_closure_expr(t.clone()) {
+        Some(expr)
     } else if let Some(expr) = try_get_parenthesized_expr(t.clone()) {
         Some(expr)
     } else if let Some(expr) = try_get_object_value(t.clone()) {
@@ -59,6 +61,44 @@ pub fn try_get_expr(t: Vec<Token>) -> Option<Expression> {
     };
     info!("Get Expr: {:?} -> {:?}", t, r);
     r
+}
+
+pub fn try_get_closure_expr(t: Vec<Token>) -> Option<Expression> {
+    if t.len() >= 4 && matches!(t[0], Token::VerticalBar) {
+        let mut params = Vec::new();
+        let mut closing_bar = None;
+        for i in 1..t.len() {
+            match &t[i] {
+                Token::Identifier(s) => {
+                    params.push(s.to_owned());
+                }
+                Token::Comma => (),
+                Token::VerticalBar => {
+                    closing_bar = Some(i);
+                    break;
+                }
+                _ => {
+                    return None;
+                }
+            }
+        }
+        if let Some(stop_i) = closing_bar {
+            if let Some(func_expr) = try_get_expr(t[stop_i + 1..].to_vec()) {
+                return Some(Expression::Value(VariableValue::Function(
+                    params,
+                    Box::new(func_expr),
+                )));
+            } else if let Ok(stmnt) = get_statement(t[stop_i + 1..].to_vec()) {
+                return Some(Expression::Value(VariableValue::Function(
+                    params,
+                    Box::new(Expression::Block(vec![stmnt])),
+                )));
+            }
+        }
+        None
+    } else {
+        None
+    }
 }
 
 pub fn try_get_object_value(t: Vec<Token>) -> Option<Expression> {

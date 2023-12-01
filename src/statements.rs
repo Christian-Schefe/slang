@@ -62,7 +62,7 @@ pub fn get_statements(tokens: Vec<Token>) -> Result<Vec<Statement>, SyntaxError>
     }
 }
 
-fn get_statement(t: Vec<Token>) -> Result<Statement, SyntaxError> {
+pub fn get_statement(t: Vec<Token>) -> Result<Statement, SyntaxError> {
     if t.len() == 0 {
         Ok(Statement::Empty)
     } else {
@@ -199,6 +199,12 @@ fn try_get_function_definition_statement(t: Vec<Token>) -> Option<Statement> {
                     s.to_string(),
                     params,
                     func_expr,
+                ));
+            } else if let Ok(stmnt) = get_statement(t[stop_i + 1..].to_vec()) {
+                return Some(Statement::FunctionDefinition(
+                    s.to_string(),
+                    params,
+                    Expression::Block(vec![stmnt]),
                 ));
             }
         }
