@@ -150,8 +150,7 @@ pub fn try_get_object_access(t: Vec<Token>) -> Option<ReferenceExpr> {
 }
 
 pub fn try_get_reference_expr(t: Vec<Token>) -> Option<ReferenceExpr> {
-    debug!("Get Ref Expr: {:?}", t);
-    if t.len() == 1 {
+    let r = if t.len() == 1 {
         if let Some(Token::Identifier(val)) = t.get(0) {
             Some(ReferenceExpr::Variable(val.clone()))
         } else {
@@ -163,7 +162,10 @@ pub fn try_get_reference_expr(t: Vec<Token>) -> Option<ReferenceExpr> {
         Some(expr)
     } else {
         None
-    }
+    };
+    
+    debug!("Get Ref Expr: {:?} -> {:?}", t, r);
+    r
 }
 
 pub fn try_get_array_access(t: Vec<Token>) -> Option<ReferenceExpr> {
@@ -429,46 +431,63 @@ pub fn try_get_block_expr(t: Vec<Token>) -> Option<Expression> {
 }
 
 pub fn try_get_function_expr(t: Vec<Token>) -> Option<Expression> {
-    if t.len() >= 3
-        && matches!(t[1], Token::OpeningParethesis)
-        && matches!(t[t.len() - 1], Token::ClosingParethesis)
-    {
-        if let Token::Identifier(s) = &t[0] {
-            let mut params = Vec::new();
-            let mut last_comma = 2;
-            let mut indent_level = 0;
-            for i in 2..t.len() - 1 {
-                match t[i] {
-                    Token::Comma => {
-                        if indent_level == 0 {
-                            let expr = try_get_expr(t[last_comma..i].to_vec());
-                            if expr.is_none() {
-                                return None;
-                            }
-                            params.push(expr.unwrap());
-                            last_comma = i + 1;
-                        }
+    if t.len() >= 3 && matches!(t[t.len() - 1], Token::ClosingParethesis) {
+        let mut indent_level = 0;
+        let mut opening_parenthesis = None;
+
+        for i in 0..t.len() {
+            match &t[i] {
+                Token::OpeningBrace => indent_level += 1,
+                Token::OpeningParethesis => {
+                    if indent_level == 0 {
+                        opening_parenthesis = Some(i);
+                        break;
                     }
-                    Token::OpeningParethesis => {
-                        indent_level += 1;
-                    }
-                    Token::ClosingParethesis => {
-                        indent_level -= 1;
-                    }
-                    _ => (),
+                    indent_level += 1;
                 }
+                Token::OpeningBracket => indent_level += 1,
+
+                Token::ClosingBrace => indent_level -= 1,
+                Token::ClosingParethesis => indent_level -= 1,
+                Token::ClosingBracket => indent_level -= 1,
+                _ => (),
             }
-            let last_expr = try_get_expr(t[last_comma..t.len() - 1].to_vec());
-            if last_expr.is_some() {
-                params.push(last_expr.unwrap());
-            }
-            if params.len() == 0 && t.len() > 3 {
-                return None;
-            } else {
-                return Some(Expression::FunctionCall(
-                    ReferenceExpr::Variable(s.clone()),
-                    params,
-                ));
+        }
+        if let Some(opening_i) = opening_parenthesis {
+            if let Some(ref_expr) = try_get_reference_expr(t[0..opening_i].to_vec()) {
+                let mut params = Vec::new();
+                let mut last_comma = opening_i + 1;
+                let mut indent_level = 0;
+                for i in opening_i+1..t.len() - 1 {
+                    match t[i] {
+                        Token::Comma => {
+                            if indent_level == 0 {
+                                let expr = try_get_expr(t[last_comma..i].to_vec());
+                                if expr.is_none() {
+                                    return None;
+                                }
+                                params.push(expr.unwrap());
+                                last_comma = i + 1;
+                            }
+                        }
+                        Token::OpeningParethesis => {
+                            indent_level += 1;
+                        }
+                        Token::ClosingParethesis => {
+                            indent_level -= 1;
+                        }
+                        _ => (),
+                    }
+                }
+                let last_expr = try_get_expr(t[last_comma..t.len() - 1].to_vec());
+                if last_expr.is_some() {
+                    params.push(last_expr.unwrap());
+                }
+                if params.len() == 0 && t.len() > 3 {
+                    return None;
+                } else {
+                    return Some(Expression::FunctionCall(ref_expr, params));
+                }
             }
         }
     }

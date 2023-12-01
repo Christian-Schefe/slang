@@ -5,6 +5,7 @@ use std::{
     io::{stdin, stdout, Write},
 };
 
+use builtin_functions::*;
 use context::*;
 use expressions::*;
 use log::{debug, error, info};
@@ -13,6 +14,7 @@ use statements::*;
 use tokenizer::*;
 use variables::*;
 
+mod builtin_functions;
 mod context;
 mod expressions;
 mod statements;
@@ -235,6 +237,24 @@ fn evaluate_expr(context: &mut Context, expr: Expression) -> Result<VariableValu
                     context.apply_subcontext(layer, inner_context)?;
                     Ok(result)
                 }
+                VariableValue::BuiltinFunction(target, name) => match *target {
+                    VariableValue::String(s) => {
+                        if name == "split" {
+                            if let Some(VariableValue::String(splitter)) = values.get(0) {
+                                let splits = s
+                                    .split(splitter)
+                                    .map(|sp| VariableValue::String(sp.to_string()))
+                                    .collect();
+                                Ok(VariableValue::List(splits))
+                            } else {
+                                Err(RuntimeError(format!("invalid args")))
+                            }
+                        } else {
+                            Err(RuntimeError(format!("{} is not a builtin function", name)))
+                        }
+                    }
+                    _ => Err(RuntimeError(format!("{} is not a builtin function", name))),
+                },
                 _ => Err(RuntimeError(format!("{} is not a function", func))),
             }
         }
@@ -318,7 +338,9 @@ fn get_reference_and_layer(
                     .ok_or(RuntimeError("invalid property".to_string()))
                     .map(|v| (layer, v.clone()))
             } else {
-                Err(RuntimeError("not an object".to_string()))
+                try_get_builtin_function(o, var)
+                    .ok_or(RuntimeError("not an object".to_string()))
+                    .map(|v| (layer, v))
             }
         }
     }

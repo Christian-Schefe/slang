@@ -52,6 +52,7 @@ pub enum VariableValue {
     String(String),
     Unit,
     Function(Vec<String>, Box<Expression>),
+    BuiltinFunction(Box<VariableValue>, String),
     List(Vec<VariableValue>),
     Object(Scope),
 }
@@ -76,6 +77,7 @@ impl Display for VariableValue {
             }
             VariableValue::Number(n) => n.to_string(),
             VariableValue::Boolean(b) => b.to_string(),
+            VariableValue::BuiltinFunction(b, s) => format!("{:?} - {:?}", b, s),
             VariableValue::String(s) => s.to_string(),
             VariableValue::Function(args, expr) => format!("{:?} -> {:?}", args, expr),
             VariableValue::List(list) => {
