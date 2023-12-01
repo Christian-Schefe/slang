@@ -5,9 +5,7 @@ use crate::*;
 #[derive(Debug, Clone)]
 pub enum Statement {
     VariableDefinition(String, Expression),
-    FunctionDefinition(String, Vec<String>, Expression),
     VariableAssignment(ReferenceExpr, Expression),
-    OperatorAssignment(ReferenceExpr, Expression, Operator),
     ReturnStatement(Expression),
     ExpressionStatement(Expression),
     WhileLoop(Expression, Expression),
@@ -160,7 +158,14 @@ fn try_get_assignment(t: Vec<Token>) -> Option<Statement> {
         if let (Some(Expression::Reference(ref_expr)), Some(val_expr)) =
             (maybe_ref_expr, maybe_val_expr)
         {
-            Some(Statement::OperatorAssignment(ref_expr, val_expr, *op))
+            Some(Statement::VariableAssignment(
+                ref_expr.clone(),
+                Expression::BinaryOperator(
+                    Box::new(Expression::Reference(ref_expr)),
+                    Box::new(val_expr),
+                    *op,
+                ),
+            ))
         } else {
             None
         }
@@ -195,16 +200,17 @@ fn try_get_function_definition_statement(t: Vec<Token>) -> Option<Statement> {
         }
         if let Some(stop_i) = closing_parenthesis {
             if let Some(func_expr) = try_get_expr(t[stop_i + 1..].to_vec()) {
-                return Some(Statement::FunctionDefinition(
+                return Some(Statement::VariableDefinition(
                     s.to_string(),
-                    params,
-                    func_expr,
+                    Expression::Value(VariableValue::Function(params, Box::new(func_expr))),
                 ));
             } else if let Ok(stmnt) = get_statement(t[stop_i + 1..].to_vec()) {
-                return Some(Statement::FunctionDefinition(
+                return Some(Statement::VariableDefinition(
                     s.to_string(),
-                    params,
-                    Expression::Block(vec![stmnt]),
+                    Expression::Value(VariableValue::Function(
+                        params,
+                        Box::new(Expression::Block(vec![stmnt])),
+                    )),
                 ));
             }
         }

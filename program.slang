@@ -9,4 +9,6 @@ fn what() let x = 5;
 
 what();
 
-print(x);
+let y = 0;
+y+= 5;
+print(y);

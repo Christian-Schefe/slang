@@ -82,18 +82,9 @@ fn execute_statement(
         Statement::ExpressionStatement(expr) => {
             evaluate_expr(context, expr)?;
         }
-        Statement::FunctionDefinition(s, params, expr) => {
-            context.define_var(&s, VariableValue::Function(params, Box::new(expr)))?;
-        }
         Statement::VariableAssignment(var, expr) => {
             let val = evaluate_expr(context, expr)?;
             set_reference(context, var, val)?;
-        }
-        Statement::OperatorAssignment(s, expr, op) => {
-            let val = evaluate_expr(context, expr)?;
-            let var = get_reference(context, s.clone())?;
-            let result = evaluate_binary_op(var.clone(), val, op)?;
-            set_reference(context, s, result)?;
         }
         Statement::WhileLoop(condition, body) => loop {
             let do_iter = evaluate_expr(context, condition.clone())?;
