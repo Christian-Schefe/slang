@@ -1,15 +1,9 @@
-use std::{
-    collections::HashMap,
-    env::args,
-    fs,
-    io::{stdin, stdout, Write},
-};
+use std::{collections::HashMap, env::args, fs};
 
 use builtin_functions::*;
 use context::*;
 use expressions::*;
 use log::{debug, error, info};
-use rand::Rng;
 use statements::*;
 use tokenizer::*;
 use variables::*;
@@ -167,94 +161,15 @@ fn evaluate_expr(context: &mut Context, expr: Expression) -> Result<VariableValu
                 .into_iter()
                 .map(|p| evaluate_expr(context, p))
                 .collect::<Result<Vec<VariableValue>, RuntimeError>>()?;
-            if let ReferenceExpr::Variable(ref built_in_fn) = function_name {
-                if built_in_fn == "print" {
-                    for val in values {
-                        print!("{} ", val);
-                    }
-                    println!();
-                    return Ok(VariableValue::Unit);
-                } else if built_in_fn == "random" {
-                    return if let (
-                        Some(VariableValue::Number(start)),
-                        Some(VariableValue::Number(end)),
-                    ) = (values.get(0), values.get(1))
-                    {
-                        let mut rng = rand::thread_rng();
-                        let val = rng.gen_range(*start..*end);
-                        Ok(VariableValue::Number(val))
-                    } else {
-                        Err(RuntimeError(format!(
-                            "Invalid arguments for 'rand': {:?}",
-                            values
-                        )))
-                    };
-                } else if built_in_fn == "input" {
-                    if let Some(val) = values.first() {
-                        print!("{}", val);
-                    }
-                    stdout()
-                        .flush()
-                        .map_err(|e| RuntimeError(format!("{}", e)))?;
-                    let mut input = String::new();
-                    stdin()
-                        .read_line(&mut input)
-                        .map_err(|e| RuntimeError(format!("{}", e)))?;
-                    return Ok(VariableValue::String(input.trim_end().to_owned()));
-                } else if built_in_fn == "int" {
-                    return if let Some(VariableValue::String(s)) = values.first() {
-                        Ok(VariableValue::Number(str::parse(s.trim()).map_err(
-                            |_| {
-                                RuntimeError(format!(
-                                    "invalid arguments to function 'int': {:?}",
-                                    values
-                                ))
-                            },
-                        )?))
-                    } else {
-                        Err(RuntimeError(
-                            "invalid arguments to function 'int'".to_owned(),
-                        ))
-                    };
-                } else if built_in_fn == "len" {
-                    return if let Some(VariableValue::List(list)) = values.first() {
-                        Ok(VariableValue::Number(list.len() as i32))
-                    } else {
-                        Err(RuntimeError(
-                            "invalid arguments to function 'len'".to_owned(),
-                        ))
-                    };
-                }
-            }
             let (layer, func) = get_reference_and_layer(context, function_name)?;
+
             match func {
                 VariableValue::Function(args, body) => {
-                    let mut inner_context = context.create_subcontext(layer)?;
-                    for i in 0..values.len() {
-                        inner_context.define_var(&args[i], values[i].clone())?;
-                    }
-                    let result = evaluate_expr(&mut inner_context, *body)?;
-                    context.apply_subcontext(layer, inner_context)?;
-                    Ok(result)
+                    execute_function(context, args, *body, values, layer)
                 }
-                VariableValue::BuiltinFunction(target, name) => match *target {
-                    VariableValue::String(s) => {
-                        if name == "split" {
-                            if let Some(VariableValue::String(splitter)) = values.get(0) {
-                                let splits = s
-                                    .split(splitter)
-                                    .map(|sp| VariableValue::String(sp.to_string()))
-                                    .collect();
-                                Ok(VariableValue::List(splits))
-                            } else {
-                                Err(RuntimeError(format!("'split' requires a string as a splitter")))
-                            }
-                        } else {
-                            Err(RuntimeError(format!("'{}' is not a builtin function for type 'string'", name)))
-                        }
-                    }
-                    _ => Err(RuntimeError(format!("'{}' is not a builtin function", name))),
-                },
+                VariableValue::BuiltinFunction(target, name) => {
+                    execute_builtin_function(context, target.map(|b| *b), name, values, layer)
+                }
                 _ => Err(RuntimeError(format!("{} is not a function", func))),
             }
         }
@@ -315,7 +230,16 @@ fn get_reference_and_layer(
     expr: ReferenceExpr,
 ) -> Result<(usize, VariableValue), RuntimeError> {
     match expr {
-        ReferenceExpr::Variable(var) => context.get_var(&var).map(|(a, b)| (a, b.clone())),
+        ReferenceExpr::Variable(var) => {
+            context
+                .get_var(&var)
+                .map(|(a, b)| (a, b.clone()))
+                .or_else(|_e| {
+                    try_get_builtin_function(None, var)
+                        .ok_or(RuntimeError("not a global builtin func".to_string()))
+                        .map(|v| (0, v))
+                })
+        }
         ReferenceExpr::Index(list_ref, index_expr) => {
             let i = evaluate_expr(context, *index_expr)?;
             let (layer, l) = get_reference_and_layer(context, *list_ref)?;
@@ -338,7 +262,7 @@ fn get_reference_and_layer(
                     .ok_or(RuntimeError("invalid property".to_string()))
                     .map(|v| (layer, v.clone()))
             } else {
-                try_get_builtin_function(o, var)
+                try_get_builtin_function(Some(o), var)
                     .ok_or(RuntimeError("not an object".to_string()))
                     .map(|v| (layer, v))
             }
@@ -390,4 +314,20 @@ fn set_reference(
             }
         }
     }
+}
+
+fn execute_function(
+    context: &mut Context,
+    args: Vec<String>,
+    body: Expression,
+    values: Vec<VariableValue>,
+    layer: usize,
+) -> Result<VariableValue, RuntimeError> {
+    let mut inner_context = context.create_subcontext(layer)?;
+    for i in 0..values.len() {
+        inner_context.define_var(&args[i], values[i].clone())?;
+    }
+    let result = evaluate_expr(&mut inner_context, body)?;
+    context.apply_subcontext(layer, inner_context)?;
+    Ok(result)
 }

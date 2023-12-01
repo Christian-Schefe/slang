@@ -52,7 +52,7 @@ pub enum VariableValue {
     String(String),
     Unit,
     Function(Vec<String>, Box<Expression>),
-    BuiltinFunction(Box<VariableValue>, String),
+    BuiltinFunction(Option<Box<VariableValue>>, String),
     List(Vec<VariableValue>),
     Object(Scope),
 }

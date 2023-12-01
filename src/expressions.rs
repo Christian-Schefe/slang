@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use log::{debug, error, info};
+use log::{debug, info};
 
 use crate::{
     context::Scope,
@@ -482,7 +482,7 @@ pub fn try_get_function_expr(t: Vec<Token>) -> Option<Expression> {
                 let last_tokens = t[last_comma..t.len() - 1].to_vec();
                 let last_tokens_count = last_tokens.len();
                 let last_expr = try_get_expr(last_tokens);
-                
+
                 if last_expr.is_some() {
                     params.push(last_expr.unwrap());
                 } else if last_tokens_count > 0 {
