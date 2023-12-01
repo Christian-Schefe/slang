@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use log::{debug, info};
+use log::{debug, error, info};
 
 use crate::{
     context::Scope,
@@ -163,7 +163,7 @@ pub fn try_get_reference_expr(t: Vec<Token>) -> Option<ReferenceExpr> {
     } else {
         None
     };
-    
+
     debug!("Get Ref Expr: {:?} -> {:?}", t, r);
     r
 }
@@ -458,7 +458,7 @@ pub fn try_get_function_expr(t: Vec<Token>) -> Option<Expression> {
                 let mut params = Vec::new();
                 let mut last_comma = opening_i + 1;
                 let mut indent_level = 0;
-                for i in opening_i+1..t.len() - 1 {
+                for i in opening_i + 1..t.len() - 1 {
                     match t[i] {
                         Token::Comma => {
                             if indent_level == 0 {
@@ -479,15 +479,17 @@ pub fn try_get_function_expr(t: Vec<Token>) -> Option<Expression> {
                         _ => (),
                     }
                 }
-                let last_expr = try_get_expr(t[last_comma..t.len() - 1].to_vec());
+                let last_tokens = t[last_comma..t.len() - 1].to_vec();
+                let last_tokens_count = last_tokens.len();
+                let last_expr = try_get_expr(last_tokens);
+                
                 if last_expr.is_some() {
                     params.push(last_expr.unwrap());
-                }
-                if params.len() == 0 && t.len() > 3 {
+                } else if last_tokens_count > 0 {
                     return None;
-                } else {
-                    return Some(Expression::FunctionCall(ref_expr, params));
                 }
+
+                return Some(Expression::FunctionCall(ref_expr, params));
             }
         }
     }

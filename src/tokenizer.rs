@@ -185,9 +185,9 @@ fn map_tokens(tokens: Vec<CharToken>) -> Result<Vec<Token>, SyntaxError> {
             CharToken::Char(c) => Some(map_char_token(c, x)),
             CharToken::Identifier(s) => Some(map_string_token(s)),
             CharToken::String(s) => {
-                let unescaped_s = unescape(&s).map_err(|_| SyntaxError("".to_owned()));
+                let unescaped_s = unescape(&s).map_err(|e| SyntaxError(format!("couldn't unescape '{}': {}", s, e)));
                 let return_val =
-                    unescaped_s.and_then(|rs| Ok(Token::Value(VariableValue::String(rs))));
+                    unescaped_s.map(|rs| Token::Value(VariableValue::String(rs)));
                 Some(return_val)
             }
         })

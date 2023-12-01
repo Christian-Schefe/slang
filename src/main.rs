@@ -247,13 +247,13 @@ fn evaluate_expr(context: &mut Context, expr: Expression) -> Result<VariableValu
                                     .collect();
                                 Ok(VariableValue::List(splits))
                             } else {
-                                Err(RuntimeError(format!("invalid args")))
+                                Err(RuntimeError(format!("'split' requires a string as a splitter")))
                             }
                         } else {
-                            Err(RuntimeError(format!("{} is not a builtin function", name)))
+                            Err(RuntimeError(format!("'{}' is not a builtin function for type 'string'", name)))
                         }
                     }
-                    _ => Err(RuntimeError(format!("{} is not a builtin function", name))),
+                    _ => Err(RuntimeError(format!("'{}' is not a builtin function", name))),
                 },
                 _ => Err(RuntimeError(format!("{} is not a function", func))),
             }
