@@ -24,6 +24,7 @@ pub fn exec_stmnt(
         Statement::VariableDefinition(var, val) => define_var(variables, var, val),
         Statement::VariableAssignment(var, val) => assign_var(variables, var, val),
         Statement::Expr(expr) => eval_expr(variables, expr).map(|_| VariableValue::Unit),
+        Statement::Return(expr) => eval_expr(variables, expr),
     }
 }
 
@@ -32,6 +33,7 @@ pub fn eval_expr(
     expr: &Expression,
 ) -> Result<VariableValue, RuntimeError> {
     match expr {
+        Expression::Block(stmnts) => exec_stmnts(variables, stmnts),
         Expression::List(list) => Ok(VariableValue::List(
             list.iter()
                 .map(|v| eval_expr(variables, v))
@@ -62,7 +64,6 @@ pub fn eval_expr(
                 Err("condition is not a boolean".into())
             }
         }
-        _ => Ok(VariableValue::Unit),
     }
 }
 

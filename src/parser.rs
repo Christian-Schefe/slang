@@ -13,6 +13,7 @@ pub enum Statement {
     VariableDefinition(String, Expression),
     VariableAssignment(ReferenceExpr, Expression),
     Expr(Expression),
+    Return(Expression),
 }
 
 #[derive(Debug, Clone)]
@@ -116,7 +117,15 @@ pub fn get_statements(t: &[PartialParsed]) -> Result<Vec<Statement>, SyntaxError
             statements.push(stmnt);
         }
     }
-    Ok(statements)
+
+    if let Some(last_stmnt) = statements.last_mut() {
+        if let Statement::Expr(ref last_expr) = last_stmnt {
+            *last_stmnt = Statement::Return(last_expr.clone());
+        }
+        Ok(statements)
+    } else {
+        Err("empty block (this error shouldn't be able to occur!)".into())
+    }
 }
 
 pub fn get_stmnt(t: &[PartialParsed]) -> Result<Statement, SyntaxError> {
@@ -131,6 +140,11 @@ pub fn get_stmnt(t: &[PartialParsed]) -> Result<Statement, SyntaxError> {
         } else {
             return Err("Invalid VariableDefinition Statement".into());
         }
+    }
+
+    if let Some(PartialParsed::Token(Token::Keyword(Keyword::Return))) = t.get(0) {
+        let expr = get_expr(&t[1..])?;
+        return Ok(Statement::Return(expr));
     }
 
     if let Some(i) = t
@@ -155,9 +169,15 @@ pub fn get_expr(t: &[PartialParsed]) -> Result<Expression, SyntaxError> {
     }
     if t.len() == 1 {
         return match t[0] {
-            PartialParsed::Braces(ref b) => get_statements(b)
-                .map(|v| Expression::Block(v))
-                .or_else(|_| get_object(b)),
+            PartialParsed::Braces(ref b) => {
+                if b.len() == 0 {
+                    Ok(Expression::Value(VariableValue::Object(HashMap::new())))
+                } else {
+                    get_statements(b)
+                        .map(|v| Expression::Block(v))
+                        .or_else(|_| get_object(b))
+                }
+            }
             PartialParsed::Parentheses(ref b) => get_expr(b),
             PartialParsed::Brackets(ref b) => if b.len() > 0 {
                 get_comma_separated_exprs(b)
@@ -176,9 +196,7 @@ pub fn get_expr(t: &[PartialParsed]) -> Result<Expression, SyntaxError> {
         };
     }
 
-    let is_closure = t
-        .iter()
-        .any(|tkn| matches!(tkn, PartialParsed::Closure(_)));
+    let is_closure = t.iter().any(|tkn| matches!(tkn, PartialParsed::Closure(_)));
     if is_closure {
         if let Some(PartialParsed::Closure(args)) = t.get(0) {
             let expr = get_expr(&t[1..])?;
