@@ -1,13 +1,13 @@
 use std::{collections::HashMap, env::args, fs};
 
-use context::*;
+use errors::*;
 use executor::*;
 use log::{error, info};
 use parser::*;
 use tokenizer::*;
 use variables::*;
 
-mod context;
+mod errors;
 mod executor;
 mod parser;
 mod tokenizer;

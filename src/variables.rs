@@ -106,7 +106,7 @@ impl VariableValue {
                 }
                 eval_expr(&mut variables, body)
             }
-            _ => Err("variable is not callable".into()),
+            _ => Err(format!("variable {} is not callable", self).into()),
         }
     }
     pub fn get_type(&self) -> String {

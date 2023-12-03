@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use log::info;
 
 use crate::{
-    context::SyntaxError,
+    errors::SyntaxError,
     tokenizer::{Keyword, Token},
     variables::{Operator, VariableValue},
 };
