@@ -52,7 +52,6 @@ pub enum VariableValue {
     String(String),
     Unit,
     Function(Vec<String>, Box<Expression>),
-    BuiltinFunction(Option<Box<VariableValue>>, Option<ReferenceExpr>, String),
     List(Vec<VariableValue>),
     Object(Scope),
 }
@@ -77,7 +76,6 @@ impl Display for VariableValue {
             }
             VariableValue::Number(n) => n.to_string(),
             VariableValue::Boolean(b) => b.to_string(),
-            VariableValue::BuiltinFunction(b, s, _) => format!("{:?} - {:?}", b, s),
             VariableValue::String(s) => format!("\"{}\"", s),
             VariableValue::Function(args, expr) => format!("{:?} -> {:?}", args, expr),
             VariableValue::List(list) => {
@@ -99,190 +97,16 @@ impl Display for VariableValue {
 }
 
 impl VariableValue {
-    pub fn get_type(&self) -> String {
+    pub fn call(&self, params: Vec<VariableValue>) -> Result<VariableValue, RuntimeError> {
         match self {
-            VariableValue::Boolean(_) => "Boolean",
-            VariableValue::Number(_) => "Number",
-            VariableValue::List(_) => "List",
-            VariableValue::Function(_, _) => "Function",
-            VariableValue::BuiltinFunction(_, _, _) => "Function",
-            VariableValue::Unit => "Unit",
-            VariableValue::String(_) => "String",
-            VariableValue::Object(_) => "Object",
-        }
-        .to_string()
-    }
-    pub fn add(a: VariableValue, b: VariableValue) -> Result<VariableValue, RuntimeError> {
-        match (a, b) {
-            (Self::Number(na), Self::Number(nb)) => Ok(VariableValue::Number(na + nb)),
-            (Self::String(na), Self::String(nb)) => Ok(VariableValue::String(na + &nb)),
-            (Self::List(mut na), Self::List(mut nb)) => {
-                na.append(&mut nb);
-                Ok(VariableValue::List(na))
+            VariableValue::Function(args, body) => {
+                let mut variables = HashMap::new();
+                for (var, val) in args.iter().zip(params) {
+                    define_var_by_val(&mut variables, var, val)?;
+                }
+                eval_expr(&mut variables, body)
             }
-            (Self::List(mut na), other) => {
-                na.push(other);
-                Ok(VariableValue::List(na))
-            }
-            (x, y) => Err(RuntimeError(format!(
-                "Addition between {} and {} is not implemented!",
-                x, y
-            ))),
-        }
-    }
-
-    pub fn subtract(a: VariableValue, b: VariableValue) -> Result<VariableValue, RuntimeError> {
-        match (a, b) {
-            (Self::Number(na), Self::Number(nb)) => Ok(VariableValue::Number(na - nb)),
-            (x, y) => Err(RuntimeError(format!(
-                "Subtraction between {} and {} is not implemented!",
-                x, y
-            ))),
-        }
-    }
-
-    pub fn multiply(a: VariableValue, b: VariableValue) -> Result<VariableValue, RuntimeError> {
-        match (a, b) {
-            (Self::Number(na), Self::Number(nb)) => Ok(VariableValue::Number(na * nb)),
-            (x, y) => Err(RuntimeError(format!(
-                "Multiplication between {} and {} is not implemented!",
-                x, y
-            ))),
-        }
-    }
-    pub fn divide(a: VariableValue, b: VariableValue) -> Result<VariableValue, RuntimeError> {
-        match (a, b) {
-            (Self::Number(na), Self::Number(nb)) => Ok(VariableValue::Number(na / nb)),
-            (x, y) => Err(RuntimeError(format!(
-                "Division between {} and {} is not implemented!",
-                x, y
-            ))),
-        }
-    }
-    pub fn modulo(a: VariableValue, b: VariableValue) -> Result<VariableValue, RuntimeError> {
-        match (a, b) {
-            (Self::Number(na), Self::Number(nb)) => Ok(VariableValue::Number(na % nb)),
-            (x, y) => Err(RuntimeError(format!(
-                "Division between {} and {} is not implemented!",
-                x, y
-            ))),
-        }
-    }
-
-    pub fn equals(a: VariableValue, b: VariableValue) -> Result<VariableValue, RuntimeError> {
-        match (a, b) {
-            (Self::Number(na), Self::Number(nb)) => Ok(VariableValue::Boolean(na == nb)),
-            (Self::Boolean(na), Self::Boolean(nb)) => Ok(VariableValue::Boolean(na == nb)),
-            (Self::String(na), Self::String(nb)) => Ok(VariableValue::Boolean(na == nb)),
-            (x, y) => Err(RuntimeError(format!(
-                "Equal between {} and {} is not implemented!",
-                x, y
-            ))),
-        }
-    }
-
-    pub fn not_equals(a: VariableValue, b: VariableValue) -> Result<VariableValue, RuntimeError> {
-        match (a, b) {
-            (Self::Number(na), Self::Number(nb)) => Ok(VariableValue::Boolean(na != nb)),
-            (Self::Boolean(na), Self::Boolean(nb)) => Ok(VariableValue::Boolean(na != nb)),
-            (Self::String(na), Self::String(nb)) => Ok(VariableValue::Boolean(na != nb)),
-            (x, y) => Err(RuntimeError(format!(
-                "Not Equal between {} and {} is not implemented!",
-                x, y
-            ))),
-        }
-    }
-
-    pub fn less_than(a: VariableValue, b: VariableValue) -> Result<VariableValue, RuntimeError> {
-        match (a, b) {
-            (Self::Number(na), Self::Number(nb)) => Ok(VariableValue::Boolean(na < nb)),
-            (Self::Boolean(na), Self::Boolean(nb)) => Ok(VariableValue::Boolean(na < nb)),
-            (Self::String(na), Self::String(nb)) => Ok(VariableValue::Boolean(na < nb)),
-            (x, y) => Err(RuntimeError(format!(
-                "Less Than between {} and {} is not implemented!",
-                x, y
-            ))),
-        }
-    }
-
-    pub fn greater_than(a: VariableValue, b: VariableValue) -> Result<VariableValue, RuntimeError> {
-        match (a, b) {
-            (Self::Number(na), Self::Number(nb)) => Ok(VariableValue::Boolean(na > nb)),
-            (Self::Boolean(na), Self::Boolean(nb)) => Ok(VariableValue::Boolean(na > nb)),
-            (Self::String(na), Self::String(nb)) => Ok(VariableValue::Boolean(na > nb)),
-            (x, y) => Err(RuntimeError(format!(
-                "Greater Than between {} and {} is not implemented!",
-                x, y
-            ))),
-        }
-    }
-
-    pub fn less_than_or_equal(
-        a: VariableValue,
-        b: VariableValue,
-    ) -> Result<VariableValue, RuntimeError> {
-        match (a, b) {
-            (Self::Number(na), Self::Number(nb)) => Ok(VariableValue::Boolean(na <= nb)),
-            (Self::Boolean(na), Self::Boolean(nb)) => Ok(VariableValue::Boolean(na <= nb)),
-            (Self::String(na), Self::String(nb)) => Ok(VariableValue::Boolean(na <= nb)),
-            (x, y) => Err(RuntimeError(format!(
-                "Less Than Or Equal between {} and {} is not implemented!",
-                x, y
-            ))),
-        }
-    }
-
-    pub fn greater_than_or_equal(
-        a: VariableValue,
-        b: VariableValue,
-    ) -> Result<VariableValue, RuntimeError> {
-        match (a, b) {
-            (Self::Number(na), Self::Number(nb)) => Ok(VariableValue::Boolean(na >= nb)),
-            (Self::Boolean(na), Self::Boolean(nb)) => Ok(VariableValue::Boolean(na >= nb)),
-            (Self::String(na), Self::String(nb)) => Ok(VariableValue::Boolean(na >= nb)),
-            (x, y) => Err(RuntimeError(format!(
-                "Greater Than Or Equal between {} and {} is not implemented!",
-                x, y
-            ))),
-        }
-    }
-    pub fn and(a: VariableValue, b: VariableValue) -> Result<VariableValue, RuntimeError> {
-        match (a, b) {
-            (Self::Boolean(na), Self::Boolean(nb)) => Ok(VariableValue::Boolean(na && nb)),
-            (x, y) => Err(RuntimeError(format!(
-                "AND between {} and {} is not implemented!",
-                x, y
-            ))),
-        }
-    }
-    pub fn or(a: VariableValue, b: VariableValue) -> Result<VariableValue, RuntimeError> {
-        match (a, b) {
-            (Self::Boolean(na), Self::Boolean(nb)) => Ok(VariableValue::Boolean(na || nb)),
-            (x, y) => Err(RuntimeError(format!(
-                "OR between {} and {} is not implemented!",
-                x, y
-            ))),
-        }
-    }
-    pub fn not(a: VariableValue) -> Result<VariableValue, RuntimeError> {
-        match a {
-            Self::Boolean(na) => Ok(VariableValue::Boolean(!na)),
-            x => Err(RuntimeError(format!("Not for {} is not implemented!", x))),
-        }
-    }
-    pub fn negate(a: VariableValue) -> Result<VariableValue, RuntimeError> {
-        match a {
-            Self::Number(na) => Ok(VariableValue::Number(-na)),
-            x => Err(RuntimeError(format!("Not for {} is not implemented!", x))),
-        }
-    }
-    pub fn unary_plus(a: VariableValue) -> Result<VariableValue, RuntimeError> {
-        match a {
-            Self::Number(na) => Ok(VariableValue::Number(0 + na)),
-            x => Err(RuntimeError(format!(
-                "Unary Plus for {} is not implemented!",
-                x
-            ))),
+            _ => Err("variable is not callable".into()),
         }
     }
 }

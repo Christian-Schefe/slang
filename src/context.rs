@@ -46,6 +46,36 @@ impl Context {
             .ok_or(RuntimeError(format!("Variable '{:?}' does not exist", var)))
     }
 
+    pub fn create_global_context(
+        args: HashMap<String, VariableValue>,
+    ) -> Result<Context, RuntimeError> {
+        let mut new_layers = Vec::with_capacity(1);
+        new_layers.push(Scope::new());
+        for (key, val) in args {
+            new_layers[0].define_var(&key, val)?;
+        }
+        Ok(Context {
+            layers: new_layers,
+            cur_layer: 0,
+        })
+    }
+
+    pub fn create_function_subcontext(
+        &self,
+        args: Vec<String>,
+        values: Vec<VariableValue>,
+    ) -> Result<Context, RuntimeError> {
+        let mut new_layers = Vec::with_capacity(1);
+        new_layers.push(Scope::new());
+        for i in 0..values.len() {
+            new_layers[0].define_var(&args[i], values[i].clone())?;
+        }
+        Ok(Context {
+            layers: new_layers,
+            cur_layer: 0,
+        })
+    }
+
     pub fn create_subcontext(&self, layer: usize) -> Result<Context, RuntimeError> {
         let mut new_layers = self.layers[0..layer + 1].to_vec();
         new_layers.push(Scope::new());
@@ -113,3 +143,56 @@ pub struct SyntaxError(pub String);
 
 #[derive(Debug)]
 pub struct ClientError(pub String);
+
+#[derive(Debug)]
+pub enum Error {
+    C(ClientError),
+    S(SyntaxError),
+    R(RuntimeError),
+}
+
+impl From<&str> for SyntaxError {
+    fn from(value: &str) -> Self {
+        SyntaxError(value.to_string())
+    }
+}
+impl From<String> for SyntaxError {
+    fn from(value: String) -> Self {
+        SyntaxError(value)
+    }
+}
+impl From<&str> for RuntimeError {
+    fn from(value: &str) -> Self {
+        RuntimeError(value.to_string())
+    }
+}
+impl From<String> for RuntimeError {
+    fn from(value: String) -> Self {
+        RuntimeError(value)
+    }
+}
+impl From<&str> for ClientError {
+    fn from(value: &str) -> Self {
+        ClientError(value.to_string())
+    }
+}
+impl From<String> for ClientError {
+    fn from(value: String) -> Self {
+        ClientError(value)
+    }
+}
+impl From<ClientError> for Error {
+    fn from(value: ClientError) -> Self {
+        Error::C(value)
+    }
+}
+impl From<RuntimeError> for Error {
+    fn from(value: RuntimeError) -> Self {
+        Error::R(value)
+    }
+}
+impl From<SyntaxError> for Error {
+    fn from(value: SyntaxError) -> Self {
+        Error::S(value)
+    }
+}
