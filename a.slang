@@ -1,10 +1,19 @@
 let list = [2, 3];
 let x = list[1];
 let y = |a| a;
+let as = true || false;
 list[1] = 2;
-let z = y(list);
+let z = y(5);
+let obj = {
+    a: 5,
+    c: x + z,
+    d: |a, b| a || b
+};
 
-# get()[2] = 0;
+let get = |c| [2, 2, 1] if c else [1, 2, 7];
+
+obj.a = get(false, true);
+obj.a[2] = 0;
 # 5().print();
 # print(x);
 # x = (-3 + 5 == 4) == !false;

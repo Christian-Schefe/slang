@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use log::{debug, info};
+use log::info;
 
 use crate::{
     context::SyntaxError,
@@ -41,6 +41,7 @@ pub enum PartialParsed {
     Braces(Vec<PartialParsed>),
     Parentheses(Vec<PartialParsed>),
     Brackets(Vec<PartialParsed>),
+    Closure(Vec<String>),
 }
 
 pub fn reduce_brackets_and_parenths(t: &[Token]) -> Result<Vec<PartialParsed>, SyntaxError> {
@@ -73,6 +74,14 @@ pub fn reduce_brackets_and_parenths(t: &[Token]) -> Result<Vec<PartialParsed>, S
                 .ok_or(SyntaxError::from("No matching closing bracket!"))?;
                 let reduced = reduce_brackets_and_parenths(&t[i + 1..i + 1 + closing])?;
                 reduced_t.push(PartialParsed::Brackets(reduced));
+                i += closing + 1;
+            }
+            Some(Token::VerticalBar) => {
+                let closing =
+                    find_matching(&t[i + 1..], |tkn| matches!(tkn, Some(Token::VerticalBar)))
+                        .ok_or(SyntaxError::from("No matching closing bracket!"))?;
+                let reduced = get_comma_separated_identifiers(&t[i + 1..i + 1 + closing])?;
+                reduced_t.push(PartialParsed::Closure(reduced));
                 i += closing + 1;
             }
             Some(tkn) => reduced_t.push(PartialParsed::Token(tkn.clone())),
@@ -163,35 +172,24 @@ pub fn get_expr(t: &[PartialParsed]) -> Result<Expression, SyntaxError> {
                 ))),
                 _ => Err("Not a valid token expr".into()),
             },
+            _ => Err("Not a valid alone closure".into()),
         };
     }
 
-    let closure_pos = t
+    let is_closure = t
         .iter()
-        .position(|tkn| matches!(tkn, PartialParsed::Token(Token::VerticalBar)));
-    if let Some(closure_i) = closure_pos {
-        if closure_i != 0 {
-            return Err("invalid closure expresion".into());
-        }
-        let closing_bar_i = closure_i
-            + 1
-            + t[closure_i + 1..]
-                .iter()
-                .position(|tkn| matches!(tkn, PartialParsed::Token(Token::VerticalBar)))
-                .ok_or(SyntaxError::from("Not a valid closure"))?;
+        .any(|tkn| matches!(tkn, PartialParsed::Closure(_)));
+    if is_closure {
+        if let Some(PartialParsed::Closure(args)) = t.get(0) {
+            let expr = get_expr(&t[1..])?;
 
-        let arg_t = &t[closure_i + 1..closing_bar_i];
-        let args = if arg_t.len() > 0 {
-            get_comma_separated_identifiers(arg_t)?
+            return Ok(Expression::Value(VariableValue::Function(
+                args.to_vec(),
+                Box::new(expr),
+            )));
         } else {
-            Vec::new()
-        };
-        let expr = get_expr(&t[closing_bar_i + 1..])?;
-
-        return Ok(Expression::Value(VariableValue::Function(
-            args,
-            Box::new(expr),
-        )));
+            return Err(format!("invalid closure expresion: {:?}", t).into());
+        }
     }
 
     let if_pos = t
@@ -341,13 +339,13 @@ pub fn get_comma_separated_exprs(t: &[PartialParsed]) -> Result<Vec<Expression>,
     Ok(exprs)
 }
 
-pub fn get_comma_separated_identifiers(t: &[PartialParsed]) -> Result<Vec<String>, SyntaxError> {
+pub fn get_comma_separated_identifiers(t: &[Token]) -> Result<Vec<String>, SyntaxError> {
     let mut idents = Vec::new();
     let commas: Vec<usize> = t
         .iter()
         .enumerate()
         .filter_map(|(i, tkn)| {
-            if matches!(tkn, PartialParsed::Token(Token::Comma)) {
+            if matches!(tkn, Token::Comma) {
                 Some(i)
             } else {
                 None
@@ -362,7 +360,7 @@ pub fn get_comma_separated_identifiers(t: &[PartialParsed]) -> Result<Vec<String
             commas[i]
         };
         if start + 1 == end {
-            if let PartialParsed::Token(Token::Identifier(ref n)) = t[start] {
+            if let Token::Identifier(ref n) = t[start] {
                 idents.push(n.to_string());
             } else {
                 return Err("invalid identifier in list".into());

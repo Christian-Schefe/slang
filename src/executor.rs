@@ -37,12 +37,30 @@ pub fn eval_expr(
                 .map(|v| eval_expr(variables, v))
                 .collect::<Result<Vec<VariableValue>, RuntimeError>>()?,
         )),
+        Expression::Object(fields) => Ok(VariableValue::Object(
+            fields
+                .iter()
+                .map(|(key, v)| eval_expr(variables, v).map(|r| (key.clone(), r)))
+                .collect::<Result<HashMap<String, VariableValue>, RuntimeError>>()?,
+        )),
         Expression::Value(var) => Ok(var.clone()),
         Expression::Reference(ref_expr) => get_var(variables, ref_expr).cloned(),
-        Expression::FunctionCall(func_expr, params) => {
-            eval_expr(variables, func_expr)?.call(params.iter()
-            .map(|v| eval_expr(variables, v))
-            .collect::<Result<Vec<VariableValue>, RuntimeError>>()?)
+        Expression::FunctionCall(func_expr, params) => eval_expr(variables, func_expr)?.call(
+            params
+                .iter()
+                .map(|v| eval_expr(variables, v))
+                .collect::<Result<Vec<VariableValue>, RuntimeError>>()?,
+        ),
+        Expression::BinaryOperator(a, b, op) => {
+            evaluate_binary_op(eval_expr(variables, a)?, eval_expr(variables, b)?, *op)
+        }
+        Expression::UnaryOperator(a, op) => evaluate_unary_op(eval_expr(variables, a)?, *op),
+        Expression::IfElse(cond_expr, if_expr, else_expr) => {
+            if let VariableValue::Boolean(cond) = eval_expr(variables, cond_expr)? {
+                eval_expr(variables, if cond { if_expr } else { else_expr })
+            } else {
+                Err("condition is not a boolean".into())
+            }
         }
         _ => Ok(VariableValue::Unit),
     }
@@ -103,7 +121,7 @@ pub fn get_var<'a>(
             if let Expression::Reference(ref_expr) = object_expr {
                 let object = get_var(variables, ref_expr)?;
                 if let VariableValue::Object(ref mut obj) = object {
-                    if let Some(val) = obj.try_get_var(index_expr) {
+                    if let Some(val) = obj.get_mut(index_expr) {
                         Ok(val)
                     } else {
                         Err("Not a field of the object".into())
@@ -156,7 +174,7 @@ pub fn assign_var(
             if let Expression::Reference(ref_expr) = object_expr {
                 let object = get_var(variables, ref_expr)?;
                 if let VariableValue::Object(ref mut scope) = object {
-                    if let Some(mut_index) = scope.try_get_var(index_expr) {
+                    if let Some(mut_index) = scope.get_mut(index_expr) {
                         *mut_index = val;
                         Ok(VariableValue::Unit)
                     } else {

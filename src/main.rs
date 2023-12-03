@@ -2,7 +2,7 @@ use std::{collections::HashMap, env::args, fs};
 
 use context::*;
 use executor::*;
-use log::{debug, error, info};
+use log::{error, info};
 use parser::*;
 use tokenizer::*;
 use variables::*;
