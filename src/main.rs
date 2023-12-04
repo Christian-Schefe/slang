@@ -35,7 +35,7 @@ fn run() -> Result<(), Error> {
 
     let statements = get_statements(&reduced)?;
     let mut variables = HashMap::new();
-    let result = exec_stmnts(&mut variables, Context::Function, &statements);
+    let result = exec_stmnts(&mut variables, &statements);
     // info!("variables: {:?}", variables);
 
     if let Err(Command::Error(e)) = result {

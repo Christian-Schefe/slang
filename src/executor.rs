@@ -3,47 +3,37 @@ use std::collections::HashMap;
 use crate::*;
 
 pub enum Command {
-    Nothing,
     Return(VariableValue),
     Break,
     Continue,
-    Consumed(Box<Command>),
     Error(RuntimeError),
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum Context {
-    Function,
-    Block,
-    Loop,
 }
 
 pub fn exec_stmnts(
     variables: &mut HashMap<String, VariableValue>,
-    context: Context,
     stmnts: &[Statement],
-) -> Result<VariableValue, Command> {
+) -> Result<Option<VariableValue>, Command> {
     for stmnt in stmnts {
-        match (exec_stmnt(variables, context, stmnt), context) {
-            (Ok(_), _) => (),
-            (Err(cmd), _) => return Err(cmd),
+        if let Some(return_val) = exec_stmnt(variables, stmnt)? {
+            return Ok(Some(return_val));
         }
     }
-    Ok(VariableValue::Unit)
+    Ok(None)
 }
 
 pub fn exec_stmnt(
     variables: &mut HashMap<String, VariableValue>,
-    context: Context,
     stmnt: &Statement,
-) -> Result<VariableValue, Command> {
+) -> Result<Option<VariableValue>, Command> {
     info!("exec: {:?}", stmnt);
     match stmnt {
-        Statement::VariableDefinition(var, val) => define_var(variables, var, val),
-        Statement::VariableAssignment(var, val) => assign_var(variables, var, val),
-        Statement::Expr(expr) => eval_expr(variables, expr),
-        Statement::Return(expr) => eval_expr(variables, expr),
-        Statement::ImplicitReturn(expr) => eval_expr(variables, expr),
+        Statement::VariableDefinition(var, val) => define_var(variables, var, val).map(|_| None),
+        Statement::VariableAssignment(var, val) => assign_var(variables, var, val).map(|_| None),
+        Statement::Expr(expr) => eval_expr(variables, expr).map(|_| None),
+        Statement::Return(expr) => Err(Command::Return(eval_expr(variables, expr)?)),
+        Statement::ImplicitReturn(expr) => {
+            eval_expr(variables, expr).map(|return_val| Some(return_val))
+        }
     }
 }
 
@@ -52,7 +42,9 @@ pub fn eval_expr(
     expr: &Expression,
 ) -> Result<VariableValue, Command> {
     match expr {
-        Expression::Block(stmnts) => exec_stmnts(variables, Context::Block, stmnts),
+        Expression::Block(stmnts) => {
+            exec_stmnts(variables, stmnts).map(|v| v.unwrap_or(VariableValue::Unit))
+        }
 
         Expression::List(list) => Ok(VariableValue::List(
             list.iter()
@@ -67,6 +59,31 @@ pub fn eval_expr(
         )),
         Expression::Value(var) => Ok(var.clone()),
         Expression::Reference(ref_expr) => get_var_cloned(variables, ref_expr),
+        Expression::ForLoop(var_name, iterator, body) => {
+            let iter = eval_expr(variables, iterator)?; //TODO: don't accept commands!
+            match iter {
+                VariableValue::List(list) => {
+                    define_var_by_val(variables, &var_name, VariableValue::Unit)?;
+                    for val in list {
+                        assign_var_by_name(variables, &var_name, val)?;
+                        match eval_expr(variables, body) {
+                            Ok(_) => (),
+                            Err(cmd) => match cmd {
+                                Command::Break => break,
+                                Command::Continue => continue,
+                                Command::Return(v) => return Err(Command::Return(v)),
+                                Command::Error(e) => return Err(Command::Error(e)),
+                            },
+                        }
+                    }
+                    Ok(VariableValue::Unit)
+                }
+
+                _ => Err(Command::Error(
+                    format!("cannot iterate over {}", iter).into(),
+                )),
+            }
+        }
         Expression::FunctionCall(func_expr, params) => eval_expr(variables, func_expr)?.call(
             params
                 .iter()
@@ -122,6 +139,19 @@ pub fn define_var_by_val(
 ) -> Result<VariableValue, Command> {
     if variables.contains_key(var) {
         Err(Command::Error("Variable is already defined".into()))
+    } else {
+        variables.insert(var.to_string(), val);
+        Ok(VariableValue::Unit)
+    }
+}
+
+pub fn assign_var_by_name(
+    variables: &mut HashMap<String, VariableValue>,
+    var: &str,
+    val: VariableValue,
+) -> Result<VariableValue, Command> {
+    if !variables.contains_key(var) {
+        Err(Command::Error("Variable is not defined".into()))
     } else {
         variables.insert(var.to_string(), val);
         Ok(VariableValue::Unit)

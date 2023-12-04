@@ -29,6 +29,7 @@ pub enum Expression {
     FunctionCall(Box<Expression>, Vec<Expression>),
     BuiltinFunctionCall(String, Option<VariableValue>, Vec<VariableValue>),
     IfElse(Box<Expression>, Box<Expression>, Box<Expression>),
+    ForLoop(String, Box<Expression>, Box<Expression>),
 }
 
 #[derive(Debug, Clone)]
@@ -121,7 +122,7 @@ pub fn get_statements(t: &[PartialParsed]) -> Result<Vec<Statement>, SyntaxError
     }
 
     if let Some(PartialParsed::Token(Token::Semicolon)) = t.last() {
-        return Ok(statements)
+        return Ok(statements);
     }
 
     if let Some(last_stmnt) = statements.last_mut() {
@@ -178,10 +179,13 @@ pub fn get_expr(t: &[PartialParsed]) -> Result<Expression, SyntaxError> {
             PartialParsed::Braces(ref b) => {
                 if b.len() == 0 {
                     Ok(Expression::Value(VariableValue::Object(HashMap::new())))
+                } else if b
+                    .iter()
+                    .any(|v| matches!(v, PartialParsed::Token(Token::Colon)))
+                {
+                    get_object(b)
                 } else {
-                    get_statements(b)
-                        .map(|v| Expression::Block(v))
-                        .or_else(|_| get_object(b))
+                    get_statements(b).map(|v| Expression::Block(v))
                 }
             }
             PartialParsed::Parentheses(ref b) => get_expr(b),
@@ -213,6 +217,34 @@ pub fn get_expr(t: &[PartialParsed]) -> Result<Expression, SyntaxError> {
             )));
         } else {
             return Err(format!("invalid closure expresion: {:?}", t).into());
+        }
+    }
+
+    let is_for_loop = t
+        .iter()
+        .any(|tkn| matches!(tkn, PartialParsed::Token(Token::Keyword(Keyword::For))));
+    if is_for_loop {
+        if let (
+            Some(PartialParsed::Token(Token::Keyword(Keyword::For))),
+            Some(PartialParsed::Token(Token::Identifier(var_name))),
+            Some(PartialParsed::Token(Token::Keyword(Keyword::In))),
+        ) = (t.get(0), t.get(1), t.get(2))
+        {
+            if t.len() < 5 {
+                return Err(format!("invalid for loop: {:?}", t).into());
+            }
+            let iterator = get_expr(&t[3..t.len() - 1])?;
+            if let Expression::Block(body) = get_expr(&t[t.len() - 1..])? {
+                return Ok(Expression::ForLoop(
+                    var_name.to_string(),
+                    Box::new(iterator),
+                    Box::new(Expression::Block(body)),
+                ));
+            } else {
+                return Err(format!("invalid for loop body: {:?}", t).into());
+            }
+        } else {
+            return Err(format!("invalid for loop: {:?}", t).into());
         }
     }
 
@@ -299,7 +331,7 @@ pub fn get_expr(t: &[PartialParsed]) -> Result<Expression, SyntaxError> {
         ))));
     }
 
-    Err(format!("Not a valid expr {:?}", t).into())
+    Err(format!("Not a valid expr: {:?}. Are you missing a semicolon?", t).into())
 }
 
 pub fn get_object(t: &[PartialParsed]) -> Result<Expression, SyntaxError> {

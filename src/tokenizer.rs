@@ -51,6 +51,7 @@ impl Display for Token {
             Token::Keyword(Keyword::While) => "while".to_string(),
             Token::Keyword(Keyword::For) => "for".to_string(),
             Token::Keyword(Keyword::If) => "if".to_string(),
+            Token::Keyword(Keyword::In) => "in".to_string(),
             Token::Keyword(Keyword::Else) => "else".to_string(),
             Token::Value(v) => v.to_string(),
             Token::Semicolon => ";".to_string(),
@@ -85,6 +86,7 @@ pub enum Keyword {
     Fn,
     If,
     Else,
+    In,
 }
 
 #[derive(Debug, Clone)]
@@ -237,6 +239,7 @@ fn map_string_token(s: String) -> Result<Token, SyntaxError> {
         "return" => Ok(Token::Keyword(Keyword::Return)),
         "fn" => Ok(Token::Keyword(Keyword::Fn)),
         "if" => Ok(Token::Keyword(Keyword::If)),
+        "in" => Ok(Token::Keyword(Keyword::In)),
         "else" => Ok(Token::Keyword(Keyword::Else)),
         "true" => Ok(Token::Value(VariableValue::Boolean(true))),
         "false" => Ok(Token::Value(VariableValue::Boolean(false))),

@@ -17,3 +17,18 @@ let obj = {
 };
 obj.print();
 (|a| a.print())(5);
+
+let func = |x| {
+    let y = 4;
+    {
+        y = 5;
+        return y;
+    };
+    return x;
+};
+
+for a in [1, 2, 3] {
+    print(a);
+};
+
+print(func(3));

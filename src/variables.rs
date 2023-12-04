@@ -105,12 +105,24 @@ impl VariableValue {
                     define_var_by_val(&mut variables, var, val.clone())?;
                 }
                 define_var_by_val(&mut variables, "self", self.clone())?;
-                match *body.clone() {
+                match match *body.clone() {
                     Expression::BuiltinFunctionCall(name, target, _) => {
                         let new_body = Expression::BuiltinFunctionCall(name, target, params);
                         eval_expr(&mut variables, &new_body)
                     }
                     any_body => eval_expr(&mut variables, &any_body),
+                } {
+                    Ok(val) => Ok(val),
+                    Err(command) => match command {
+                        Command::Return(val) => Ok(val),
+                        Command::Continue => {
+                            Err(Command::Error("continue can't go outside function".into()))
+                        }
+                        Command::Break => {
+                            Err(Command::Error("break can't go outside function".into()))
+                        }
+                        Command::Error(e) => Err(Command::Error(e)),
+                    },
                 }
             }
             _ => Err(Command::Error(
