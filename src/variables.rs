@@ -97,16 +97,25 @@ impl Display for VariableValue {
 }
 
 impl VariableValue {
-    pub fn call(&self, params: Vec<VariableValue>) -> Result<VariableValue, RuntimeError> {
+    pub fn call(&self, params: Vec<VariableValue>) -> Result<VariableValue, Command> {
         match self {
             VariableValue::Function(args, body) => {
                 let mut variables = HashMap::new();
-                for (var, val) in args.iter().zip(params) {
-                    define_var_by_val(&mut variables, var, val)?;
+                for (var, val) in args.iter().zip(params.iter()) {
+                    define_var_by_val(&mut variables, var, val.clone())?;
                 }
-                eval_expr(&mut variables, body)
+                define_var_by_val(&mut variables, "self", self.clone())?;
+                match *body.clone() {
+                    Expression::BuiltinFunctionCall(name, target, _) => {
+                        let new_body = Expression::BuiltinFunctionCall(name, target, params);
+                        eval_expr(&mut variables, &new_body)
+                    }
+                    any_body => eval_expr(&mut variables, &any_body),
+                }
             }
-            _ => Err(format!("variable {} is not callable", self).into()),
+            _ => Err(Command::Error(
+                format!("variable {} is not callable", self).into(),
+            )),
         }
     }
     pub fn get_type(&self) -> String {
@@ -313,11 +322,14 @@ pub fn evaluate_binary_op(
     }
 }
 
-pub fn evaluate_unary_op(a: VariableValue, op: Operator) -> Result<VariableValue, RuntimeError> {
+pub fn evaluate_unary_op(a: VariableValue, op: Operator) -> Result<VariableValue, Command> {
     match op {
-        Operator::Not => VariableValue::not(a),
-        Operator::Negate => VariableValue::negate(a),
-        Operator::UnaryPlus => VariableValue::unary_plus(a),
-        _ => Err(RuntimeError(format!("{:?} is not a unary operator!", op))),
+        Operator::Not => VariableValue::not(a).map_err(|v| Command::Error(v)),
+        Operator::Negate => VariableValue::negate(a).map_err(|v| Command::Error(v)),
+        Operator::UnaryPlus => VariableValue::unary_plus(a).map_err(|v| Command::Error(v)),
+        _ => Err(Command::Error(RuntimeError(format!(
+            "{:?} is not a unary operator!",
+            op
+        )))),
     }
 }

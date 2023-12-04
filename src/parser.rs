@@ -14,6 +14,7 @@ pub enum Statement {
     VariableAssignment(ReferenceExpr, Expression),
     Expr(Expression),
     Return(Expression),
+    ImplicitReturn(Expression),
 }
 
 #[derive(Debug, Clone)]
@@ -26,6 +27,7 @@ pub enum Expression {
     UnaryOperator(Box<Expression>, Operator),
     Block(Vec<Statement>),
     FunctionCall(Box<Expression>, Vec<Expression>),
+    BuiltinFunctionCall(String, Option<VariableValue>, Vec<VariableValue>),
     IfElse(Box<Expression>, Box<Expression>, Box<Expression>),
 }
 
@@ -118,9 +120,13 @@ pub fn get_statements(t: &[PartialParsed]) -> Result<Vec<Statement>, SyntaxError
         }
     }
 
+    if let Some(PartialParsed::Token(Token::Semicolon)) = t.last() {
+        return Ok(statements)
+    }
+
     if let Some(last_stmnt) = statements.last_mut() {
         if let Statement::Expr(ref last_expr) = last_stmnt {
-            *last_stmnt = Statement::Return(last_expr.clone());
+            *last_stmnt = Statement::ImplicitReturn(last_expr.clone());
         }
         Ok(statements)
     } else {

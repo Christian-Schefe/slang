@@ -2,14 +2,31 @@ use std::collections::HashMap;
 
 use crate::*;
 
+pub enum Command {
+    Nothing,
+    Return(VariableValue),
+    Break,
+    Continue,
+    Consumed(Box<Command>),
+    Error(RuntimeError),
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum Context {
+    Function,
+    Block,
+    Loop,
+}
+
 pub fn exec_stmnts(
     variables: &mut HashMap<String, VariableValue>,
+    context: Context,
     stmnts: &[Statement],
-) -> Result<VariableValue, RuntimeError> {
+) -> Result<VariableValue, Command> {
     for stmnt in stmnts {
-        match exec_stmnt(variables, stmnt)? {
-            VariableValue::Unit => (),
-            result => return Ok(result),
+        match (exec_stmnt(variables, context, stmnt), context) {
+            (Ok(_), _) => (),
+            (Err(cmd), _) => return Err(cmd),
         }
     }
     Ok(VariableValue::Unit)
@@ -17,33 +34,36 @@ pub fn exec_stmnts(
 
 pub fn exec_stmnt(
     variables: &mut HashMap<String, VariableValue>,
+    context: Context,
     stmnt: &Statement,
-) -> Result<VariableValue, RuntimeError> {
+) -> Result<VariableValue, Command> {
     info!("exec: {:?}", stmnt);
     match stmnt {
         Statement::VariableDefinition(var, val) => define_var(variables, var, val),
         Statement::VariableAssignment(var, val) => assign_var(variables, var, val),
-        Statement::Expr(expr) => eval_expr(variables, expr).map(|_| VariableValue::Unit),
+        Statement::Expr(expr) => eval_expr(variables, expr),
         Statement::Return(expr) => eval_expr(variables, expr),
+        Statement::ImplicitReturn(expr) => eval_expr(variables, expr),
     }
 }
 
 pub fn eval_expr(
     variables: &mut HashMap<String, VariableValue>,
     expr: &Expression,
-) -> Result<VariableValue, RuntimeError> {
+) -> Result<VariableValue, Command> {
     match expr {
-        Expression::Block(stmnts) => exec_stmnts(variables, stmnts),
+        Expression::Block(stmnts) => exec_stmnts(variables, Context::Block, stmnts),
+
         Expression::List(list) => Ok(VariableValue::List(
             list.iter()
                 .map(|v| eval_expr(variables, v))
-                .collect::<Result<Vec<VariableValue>, RuntimeError>>()?,
+                .collect::<Result<Vec<VariableValue>, Command>>()?,
         )),
         Expression::Object(fields) => Ok(VariableValue::Object(
             fields
                 .iter()
                 .map(|(key, v)| eval_expr(variables, v).map(|r| (key.clone(), r)))
-                .collect::<Result<HashMap<String, VariableValue>, RuntimeError>>()?,
+                .collect::<Result<HashMap<String, VariableValue>, Command>>()?,
         )),
         Expression::Value(var) => Ok(var.clone()),
         Expression::Reference(ref_expr) => get_var_cloned(variables, ref_expr),
@@ -51,17 +71,36 @@ pub fn eval_expr(
             params
                 .iter()
                 .map(|v| eval_expr(variables, v))
-                .collect::<Result<Vec<VariableValue>, RuntimeError>>()?,
+                .collect::<Result<Vec<VariableValue>, Command>>()?,
         ),
+        Expression::BuiltinFunctionCall(name, target, params) => match name.as_str() {
+            "print" => {
+                if let Some(print_target) = target {
+                    println!("{}", print_target)
+                } else {
+                    for (i, val) in params.iter().enumerate() {
+                        if i == 0 {
+                            print!("{}", val)
+                        } else {
+                            print!(" {}", val)
+                        }
+                    }
+                    println!();
+                }
+                Ok(VariableValue::Unit)
+            }
+            _ => Err(Command::Error("not a builtin function".into())),
+        },
         Expression::BinaryOperator(a, b, op) => {
             evaluate_binary_op(eval_expr(variables, a)?, eval_expr(variables, b)?, *op)
+                .map_err(|v| Command::Error(v))
         }
         Expression::UnaryOperator(a, op) => evaluate_unary_op(eval_expr(variables, a)?, *op),
         Expression::IfElse(cond_expr, if_expr, else_expr) => {
             if let VariableValue::Boolean(cond) = eval_expr(variables, cond_expr)? {
                 eval_expr(variables, if cond { if_expr } else { else_expr })
             } else {
-                Err("condition is not a boolean".into())
+                Err(Command::Error("condition is not a boolean".into()))
             }
         }
     }
@@ -71,7 +110,7 @@ pub fn define_var(
     variables: &mut HashMap<String, VariableValue>,
     var: &str,
     expr: &Expression,
-) -> Result<VariableValue, RuntimeError> {
+) -> Result<VariableValue, Command> {
     let val = eval_expr(variables, expr)?;
     define_var_by_val(variables, var, val)
 }
@@ -80,9 +119,9 @@ pub fn define_var_by_val(
     variables: &mut HashMap<String, VariableValue>,
     var: &str,
     val: VariableValue,
-) -> Result<VariableValue, RuntimeError> {
+) -> Result<VariableValue, Command> {
     if variables.contains_key(var) {
-        Err("Variable is already defined".into())
+        Err(Command::Error("Variable is already defined".into()))
     } else {
         variables.insert(var.to_string(), val);
         Ok(VariableValue::Unit)
@@ -92,13 +131,15 @@ pub fn define_var_by_val(
 pub fn get_var<'a>(
     variables: &'a mut HashMap<String, VariableValue>,
     var_expr: &ReferenceExpr,
-) -> Result<&'a mut VariableValue, RuntimeError> {
+) -> Result<&'a mut VariableValue, Command> {
     match var_expr {
         ReferenceExpr::Variable(ref var) => {
             if let Some(val) = variables.get_mut(var) {
                 Ok(val)
             } else {
-                Err(format!("Variable '{}' is not defined", var).into())
+                Err(Command::Error(
+                    format!("Variable '{}' is not defined", var).into(),
+                ))
             }
         }
         ReferenceExpr::Index(list_expr, index_expr) => {
@@ -109,13 +150,13 @@ pub fn get_var<'a>(
                     if let Some(val) = li.get_mut(i as usize) {
                         Ok(val)
                     } else {
-                        Err("Index is out of bounds".into())
+                        Err(Command::Error("Index is out of bounds".into()))
                     }
                 } else {
-                    Err("Variable is not a list".into())
+                    Err(Command::Error("Variable is not a list".into()))
                 }
             } else {
-                Err("Variable is not a ref".into())
+                Err(Command::Error("Variable is not a ref".into()))
             }
         }
         ReferenceExpr::Object(object_expr, index_expr) => {
@@ -125,13 +166,13 @@ pub fn get_var<'a>(
                     if let Some(val) = obj.get_mut(index_expr) {
                         Ok(val)
                     } else {
-                        Err("Not a field of the object".into())
+                        Err(Command::Error("Not a field of the object".into()))
                     }
                 } else {
-                    Err("Variable is not an object".into())
+                    Err(Command::Error("Variable is not an object".into()))
                 }
             } else {
-                Err("Variable is not a ref".into())
+                Err(Command::Error("Variable is not a ref".into()))
             }
         }
     }
@@ -139,13 +180,25 @@ pub fn get_var<'a>(
 pub fn get_var_cloned(
     variables: &mut HashMap<String, VariableValue>,
     var_expr: &ReferenceExpr,
-) -> Result<VariableValue, RuntimeError> {
+) -> Result<VariableValue, Command> {
     match var_expr {
         ReferenceExpr::Variable(ref var) => {
             if let Some(val) = variables.get(var) {
                 Ok(val.clone())
             } else {
-                Err(format!("Variable '{}' is not defined", var).into())
+                match var.as_str() {
+                    "print" => Ok(VariableValue::Function(
+                        Vec::new(),
+                        Box::new(Expression::BuiltinFunctionCall(
+                            "print".to_string(),
+                            None,
+                            Vec::new(),
+                        )),
+                    )),
+                    _ => Err(Command::Error(
+                        format!("Variable '{}' is not defined", var).into(),
+                    )),
+                }
             }
         }
         ReferenceExpr::Index(list_expr, index_expr) => {
@@ -156,10 +209,10 @@ pub fn get_var_cloned(
                     if let Some(val) = li.get(i as usize) {
                         Ok(val.clone())
                     } else {
-                        Err("Index is out of bounds".into())
+                        Err(Command::Error("Index is out of bounds".into()))
                     }
                 } else {
-                    Err("Variable is not a list".into())
+                    Err(Command::Error("Variable is not a list".into()))
                 }
             } else {
                 let li = eval_expr(variables, list_expr)?;
@@ -167,10 +220,10 @@ pub fn get_var_cloned(
                     if let Some(val) = li.get(i as usize) {
                         Ok(val.clone())
                     } else {
-                        Err("Index is out of bounds".into())
+                        Err(Command::Error("Index is out of bounds".into()))
                     }
                 } else {
-                    Err("Variable is not a list".into())
+                    Err(Command::Error("Variable is not a list".into()))
                 }
             }
         }
@@ -179,23 +232,47 @@ pub fn get_var_cloned(
                 let object = get_var_cloned(variables, ref_expr)?;
                 if let VariableValue::Object(ref obj) = object {
                     if let Some(val) = obj.get(index_expr) {
-                        Ok(val.clone())
-                    } else {
-                        Err("Not a field of the object".into())
+                        return Ok(val.clone());
                     }
-                } else {
-                    Err("Variable is not an object".into())
+                }
+                match (object, index_expr.as_str()) {
+                    (obj, name) if is_builtin(name, Some(&obj)) => Ok(VariableValue::Function(
+                        Vec::new(),
+                        Box::new(Expression::BuiltinFunctionCall(
+                            name.to_string(),
+                            Some(obj.clone()),
+                            Vec::new(),
+                        )),
+                    )),
+                    (VariableValue::Object(_), field) => Err(Command::Error(
+                        format!("Identifier '{}' is not a field of the object", field).into(),
+                    )),
+                    (obj, _) => Err(Command::Error(
+                        format!("Variable '{}' is not an object", obj).into(),
+                    )),
                 }
             } else {
                 let object = eval_expr(variables, object_expr)?;
                 if let VariableValue::Object(ref obj) = object {
                     if let Some(val) = obj.get(index_expr) {
-                        Ok(val.clone())
-                    } else {
-                        Err("Not a field of the object".into())
+                        return Ok(val.clone());
                     }
-                } else {
-                    Err("Variable is not an object".into())
+                }
+                match (object, index_expr.as_str()) {
+                    (obj, name) if is_builtin(name, Some(&obj)) => Ok(VariableValue::Function(
+                        Vec::new(),
+                        Box::new(Expression::BuiltinFunctionCall(
+                            name.to_string(),
+                            Some(obj.clone()),
+                            Vec::new(),
+                        )),
+                    )),
+                    (VariableValue::Object(_), field) => Err(Command::Error(
+                        format!("Identifier '{}' is not a field of the object", field).into(),
+                    )),
+                    (obj, _) => Err(Command::Error(
+                        format!("Variable '{}' is not an object", obj).into(),
+                    )),
                 }
             }
         }
@@ -206,12 +283,12 @@ pub fn assign_var(
     variables: &mut HashMap<String, VariableValue>,
     var_expr: &ReferenceExpr,
     expr: &Expression,
-) -> Result<VariableValue, RuntimeError> {
+) -> Result<VariableValue, Command> {
     let val = eval_expr(variables, expr)?;
     match var_expr {
         ReferenceExpr::Variable(ref var) => {
             if !variables.contains_key(var) {
-                Err("Variable is not defined".into())
+                Err(Command::Error("Variable is not defined".into()))
             } else {
                 variables.insert(var.to_string(), val);
                 Ok(VariableValue::Unit)
@@ -227,13 +304,13 @@ pub fn assign_var(
                         *mut_index = val;
                         Ok(VariableValue::Unit)
                     } else {
-                        Err("Index is out of bound".into())
+                        Err(Command::Error("Index is out of bound".into()))
                     }
                 } else {
-                    Err("Variable is not a list".into())
+                    Err(Command::Error("Variable is not a list".into()))
                 }
             } else {
-                Err("Variable is not reference".into())
+                Err(Command::Error("Variable is not reference".into()))
             }
         }
         ReferenceExpr::Object(object_expr, index_expr) => {
@@ -244,13 +321,13 @@ pub fn assign_var(
                         *mut_index = val;
                         Ok(VariableValue::Unit)
                     } else {
-                        Err("Not a field of the object".into())
+                        Err(Command::Error("Not a field of the object".into()))
                     }
                 } else {
-                    Err("Variable is not an object".into())
+                    Err(Command::Error("Variable is not an object".into()))
                 }
             } else {
-                Err("Variable is not a reference".into())
+                Err(Command::Error("Variable is not a reference".into()))
             }
         }
     }

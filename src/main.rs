@@ -35,10 +35,12 @@ fn run() -> Result<(), Error> {
 
     let statements = get_statements(&reduced)?;
     let mut variables = HashMap::new();
-    let result = exec_stmnts(&mut variables, &statements);
-    info!("variables: {:?}", variables);
+    let result = exec_stmnts(&mut variables, Context::Function, &statements);
+    // info!("variables: {:?}", variables);
 
-    result?;
+    if let Err(Command::Error(e)) = result {
+        return Err(e.into());
+    }
     Ok(())
 }
 
@@ -50,4 +52,11 @@ fn read_program_file() -> Result<String, ClientError> {
     let program = fs::read_to_string(path)
         .map_err(|e| ClientError(format!("Couldn't read file at {}: {}", path, e)))?;
     Ok(program)
+}
+
+pub fn is_builtin(name: &str, target: Option<&VariableValue>) -> bool {
+    match (target, name) {
+        (_, "print") => true,
+        (_, _) => false,
+    }
 }
