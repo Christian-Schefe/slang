@@ -1,4 +1,10 @@
-let list = [2, 2];
-list.push(3);
 
-print(list);
+let tailfib = |n| {
+    let loop = |loop, i, a, b| {
+        a if i == 0 else loop(loop, i - 1, b, a + b)
+    };
+    loop(loop, n, 0, 1)
+};
+
+
+let x = tailfib(30);

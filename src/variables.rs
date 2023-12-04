@@ -52,9 +52,8 @@ pub enum VariableValue {
     String(String),
     Unit,
     Function(Vec<String>, Box<Expression>),
-    BuiltinFunction(Option<Box<VariableValue>>, Option<ReferenceExpr>, String),
     List(Vec<VariableValue>),
-    Object(Scope),
+    Object(HashMap<String, VariableValue>),
 }
 
 impl Display for VariableValue {
@@ -64,11 +63,11 @@ impl Display for VariableValue {
             VariableValue::Object(m) => {
                 let mut s = String::new();
                 s.push('{');
-                for (i, (key, val)) in m.variables.iter().enumerate() {
+                for (i, (key, val)) in m.iter().enumerate() {
                     s.push_str(key);
                     s.push_str(": ");
                     s.push_str(&val.to_string());
-                    if i + 1 < m.variables.len() {
+                    if i + 1 < m.len() {
                         s.push_str(", ");
                     }
                 }
@@ -77,7 +76,6 @@ impl Display for VariableValue {
             }
             VariableValue::Number(n) => n.to_string(),
             VariableValue::Boolean(b) => b.to_string(),
-            VariableValue::BuiltinFunction(b, s, _) => format!("{:?} - {:?}", b, s),
             VariableValue::String(s) => format!("\"{}\"", s),
             VariableValue::Function(args, expr) => format!("{:?} -> {:?}", args, expr),
             VariableValue::List(list) => {
@@ -99,13 +97,24 @@ impl Display for VariableValue {
 }
 
 impl VariableValue {
+    pub fn call(&self, params: Vec<VariableValue>) -> Result<VariableValue, RuntimeError> {
+        match self {
+            VariableValue::Function(args, body) => {
+                let mut variables = HashMap::new();
+                for (var, val) in args.iter().zip(params) {
+                    define_var_by_val(&mut variables, var, val)?;
+                }
+                eval_expr(&mut variables, body)
+            }
+            _ => Err(format!("variable {} is not callable", self).into()),
+        }
+    }
     pub fn get_type(&self) -> String {
         match self {
             VariableValue::Boolean(_) => "Boolean",
             VariableValue::Number(_) => "Number",
             VariableValue::List(_) => "List",
             VariableValue::Function(_, _) => "Function",
-            VariableValue::BuiltinFunction(_, _, _) => "Function",
             VariableValue::Unit => "Unit",
             VariableValue::String(_) => "String",
             VariableValue::Object(_) => "Object",
@@ -174,10 +183,7 @@ impl VariableValue {
             (Self::Number(na), Self::Number(nb)) => Ok(VariableValue::Boolean(na == nb)),
             (Self::Boolean(na), Self::Boolean(nb)) => Ok(VariableValue::Boolean(na == nb)),
             (Self::String(na), Self::String(nb)) => Ok(VariableValue::Boolean(na == nb)),
-            (x, y) => Err(RuntimeError(format!(
-                "Equal between {} and {} is not implemented!",
-                x, y
-            ))),
+            (x, y) => Ok(VariableValue::Boolean(x.get_type() == y.get_type())),
         }
     }
 
@@ -186,10 +192,7 @@ impl VariableValue {
             (Self::Number(na), Self::Number(nb)) => Ok(VariableValue::Boolean(na != nb)),
             (Self::Boolean(na), Self::Boolean(nb)) => Ok(VariableValue::Boolean(na != nb)),
             (Self::String(na), Self::String(nb)) => Ok(VariableValue::Boolean(na != nb)),
-            (x, y) => Err(RuntimeError(format!(
-                "Not Equal between {} and {} is not implemented!",
-                x, y
-            ))),
+            (x, y) => Ok(VariableValue::Boolean(x.get_type() != y.get_type())),
         }
     }
 
@@ -284,5 +287,37 @@ impl VariableValue {
                 x
             ))),
         }
+    }
+}
+
+pub fn evaluate_binary_op(
+    a: VariableValue,
+    b: VariableValue,
+    op: Operator,
+) -> Result<VariableValue, RuntimeError> {
+    match op {
+        Operator::Add => VariableValue::add(a, b),
+        Operator::Subtract => VariableValue::subtract(a, b),
+        Operator::Multiply => VariableValue::multiply(a, b),
+        Operator::Divide => VariableValue::divide(a, b),
+        Operator::Equal => VariableValue::equals(a, b),
+        Operator::NotEqual => VariableValue::not_equals(a, b),
+        Operator::LessThan => VariableValue::less_than(a, b),
+        Operator::LessThanOrEqual => VariableValue::less_than_or_equal(a, b),
+        Operator::GreaterThan => VariableValue::greater_than(a, b),
+        Operator::GreaterThanOrEqual => VariableValue::greater_than_or_equal(a, b),
+        Operator::And => VariableValue::and(a, b),
+        Operator::Or => VariableValue::or(a, b),
+        Operator::Modulo => VariableValue::modulo(a, b),
+        _ => Err(RuntimeError(format!("{:?} is not a binary operator!", op))),
+    }
+}
+
+pub fn evaluate_unary_op(a: VariableValue, op: Operator) -> Result<VariableValue, RuntimeError> {
+    match op {
+        Operator::Not => VariableValue::not(a),
+        Operator::Negate => VariableValue::negate(a),
+        Operator::UnaryPlus => VariableValue::unary_plus(a),
+        _ => Err(RuntimeError(format!("{:?} is not a unary operator!", op))),
     }
 }
