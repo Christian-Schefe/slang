@@ -30,5 +30,10 @@ let func = |x| {
 for a in [1, 2, 3] {
     print(a);
 };
-
+for key in obj {
+    obj[key] = 4;
+    let afas  =2;
+};
 print(func(3));
+print(obj);
+print(afas);

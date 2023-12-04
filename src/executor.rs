@@ -78,6 +78,22 @@ pub fn eval_expr(
                     }
                     Ok(VariableValue::Unit)
                 }
+                VariableValue::Object(object) => {
+                    define_var_by_val(variables, &var_name, VariableValue::Unit)?;
+                    for (key, _) in object {
+                        assign_var_by_name(variables, &var_name, VariableValue::String(key))?;
+                        match eval_expr(variables, body) {
+                            Ok(_) => (),
+                            Err(cmd) => match cmd {
+                                Command::Break => break,
+                                Command::Continue => continue,
+                                Command::Return(v) => return Err(Command::Return(v)),
+                                Command::Error(e) => return Err(Command::Error(e)),
+                            },
+                        }
+                    }
+                    Ok(VariableValue::Unit)
+                }
 
                 _ => Err(Command::Error(
                     format!("cannot iterate over {}", iter).into(),
@@ -176,14 +192,22 @@ pub fn get_var<'a>(
             let index = eval_expr(variables, index_expr)?;
             if let Expression::Reference(ref_expr) = list_expr {
                 let li = get_var(variables, ref_expr)?;
-                if let (VariableValue::List(ref mut li), VariableValue::Number(i)) = (li, index) {
-                    if let Some(val) = li.get_mut(i as usize) {
-                        Ok(val)
-                    } else {
-                        Err(Command::Error("Index is out of bounds".into()))
+                match (li, index) {
+                    (VariableValue::List(li_vec), VariableValue::Number(i)) => {
+                        if let Some(val) = li_vec.get_mut(i as usize) {
+                            Ok(val)
+                        } else {
+                            Err(Command::Error("Index is out of bounds".into()))
+                        }
                     }
-                } else {
-                    Err(Command::Error("Variable is not a list".into()))
+                    (VariableValue::Object(obj_map), VariableValue::String(key)) => {
+                        if let Some(val) = obj_map.get_mut(&key) {
+                            Ok(val)
+                        } else {
+                            Err(Command::Error("Index is out of bounds".into()))
+                        }
+                    }
+                    (_, _) => Err(Command::Error("Variable is not a list".into())),
                 }
             } else {
                 Err(Command::Error("Variable is not a ref".into()))
@@ -235,25 +259,41 @@ pub fn get_var_cloned(
             let index = eval_expr(variables, index_expr)?;
             if let Expression::Reference(ref_expr) = list_expr {
                 let li = get_var_cloned(variables, ref_expr)?;
-                if let (VariableValue::List(ref li), VariableValue::Number(i)) = (li, index) {
-                    if let Some(val) = li.get(i as usize) {
-                        Ok(val.clone())
-                    } else {
-                        Err(Command::Error("Index is out of bounds".into()))
+                match (li, index) {
+                    (VariableValue::List(li_vec), VariableValue::Number(i)) => {
+                        if let Some(val) = li_vec.get(i as usize) {
+                            Ok(val.clone())
+                        } else {
+                            Err(Command::Error("Index is out of bounds".into()))
+                        }
                     }
-                } else {
-                    Err(Command::Error("Variable is not a list".into()))
+                    (VariableValue::Object(obj_map), VariableValue::String(key)) => {
+                        if let Some(val) = obj_map.get(&key) {
+                            Ok(val.clone())
+                        } else {
+                            Err(Command::Error("Index is out of bounds".into()))
+                        }
+                    }
+                    (_, _) => Err(Command::Error("Variable is not a list".into())),
                 }
             } else {
                 let li = eval_expr(variables, list_expr)?;
-                if let (VariableValue::List(ref li), VariableValue::Number(i)) = (li, index) {
-                    if let Some(val) = li.get(i as usize) {
-                        Ok(val.clone())
-                    } else {
-                        Err(Command::Error("Index is out of bounds".into()))
+                match (li, index) {
+                    (VariableValue::List(li_vec), VariableValue::Number(i)) => {
+                        if let Some(val) = li_vec.get(i as usize) {
+                            Ok(val.clone())
+                        } else {
+                            Err(Command::Error("Index is out of bounds".into()))
+                        }
                     }
-                } else {
-                    Err(Command::Error("Variable is not a list".into()))
+                    (VariableValue::Object(obj_map), VariableValue::String(key)) => {
+                        if let Some(val) = obj_map.get(&key) {
+                            Ok(val.clone())
+                        } else {
+                            Err(Command::Error("Index is out of bounds".into()))
+                        }
+                    }
+                    (_, _) => Err(Command::Error("Variable is not a list".into())),
                 }
             }
         }
@@ -328,16 +368,24 @@ pub fn assign_var(
             let index = eval_expr(variables, index_expr)?;
             if let Expression::Reference(ref_expr) = list_expr {
                 let list = get_var(variables, ref_expr)?;
-                if let (VariableValue::List(ref mut vec), VariableValue::Number(i)) = (list, index)
-                {
-                    if let Some(mut_index) = vec.get_mut(i as usize) {
-                        *mut_index = val;
-                        Ok(VariableValue::Unit)
-                    } else {
-                        Err(Command::Error("Index is out of bound".into()))
+                match (list, index) {
+                    (VariableValue::List(li_vec), VariableValue::Number(i)) => {
+                        if let Some(mut_index) = li_vec.get_mut(i as usize) {
+                            *mut_index = val;
+                            Ok(VariableValue::Unit)
+                        } else {
+                            Err(Command::Error("Index is out of bounds".into()))
+                        }
                     }
-                } else {
-                    Err(Command::Error("Variable is not a list".into()))
+                    (VariableValue::Object(obj_map), VariableValue::String(key)) => {
+                        if let Some(mut_index) = obj_map.get_mut(&key) {
+                            *mut_index = val;
+                            Ok(VariableValue::Unit)
+                        } else {
+                            Err(Command::Error("Index is out of bounds".into()))
+                        }
+                    }
+                    (_, _) => Err(Command::Error("Variable is not a list".into())),
                 }
             } else {
                 Err(Command::Error("Variable is not reference".into()))
