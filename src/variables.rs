@@ -118,7 +118,7 @@ impl VariableValue {
                         Command::Continue => {
                             Err(Command::Error("continue can't go outside function".into()))
                         }
-                        Command::Break => {
+                        Command::Break(_) => {
                             Err(Command::Error("break can't go outside function".into()))
                         }
                         Command::Error(e) => Err(Command::Error(e)),

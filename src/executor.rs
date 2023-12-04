@@ -4,7 +4,7 @@ use crate::*;
 
 pub enum Command {
     Return(VariableValue),
-    Break,
+    Break(VariableValue),
     Continue,
     Error(RuntimeError),
 }
@@ -31,6 +31,8 @@ pub fn exec_stmnt(
         Statement::VariableAssignment(var, val) => assign_var(variables, var, val).map(|_| None),
         Statement::Expr(expr) => eval_expr(variables, expr).map(|_| None),
         Statement::Return(expr) => Err(Command::Return(eval_expr(variables, expr)?)),
+        Statement::Break(expr) => Err(Command::Break(eval_expr(variables, expr)?)),
+        Statement::Continue => Err(Command::Continue),
         Statement::ImplicitReturn(expr) => {
             eval_expr(variables, expr).map(|return_val| Some(return_val))
         }
@@ -64,35 +66,43 @@ pub fn eval_expr(
             match iter {
                 VariableValue::List(list) => {
                     define_var_by_val(variables, &var_name, VariableValue::Unit)?;
+                    let mut result = VariableValue::Unit;
                     for val in list {
                         assign_var_by_name(variables, &var_name, val)?;
                         match eval_expr(variables, body) {
                             Ok(_) => (),
                             Err(cmd) => match cmd {
-                                Command::Break => break,
+                                Command::Break(v) => {
+                                    result = v;
+                                    break;
+                                }
                                 Command::Continue => continue,
                                 Command::Return(v) => return Err(Command::Return(v)),
                                 Command::Error(e) => return Err(Command::Error(e)),
                             },
                         }
                     }
-                    Ok(VariableValue::Unit)
+                    Ok(result)
                 }
                 VariableValue::Object(object) => {
                     define_var_by_val(variables, &var_name, VariableValue::Unit)?;
+                    let mut result = VariableValue::Unit;
                     for (key, _) in object {
                         assign_var_by_name(variables, &var_name, VariableValue::String(key))?;
                         match eval_expr(variables, body) {
                             Ok(_) => (),
                             Err(cmd) => match cmd {
-                                Command::Break => break,
+                                Command::Break(v) => {
+                                    result = v;
+                                    break;
+                                }
                                 Command::Continue => continue,
                                 Command::Return(v) => return Err(Command::Return(v)),
                                 Command::Error(e) => return Err(Command::Error(e)),
                             },
                         }
                     }
-                    Ok(VariableValue::Unit)
+                    Ok(result)
                 }
 
                 _ => Err(Command::Error(
@@ -100,6 +110,22 @@ pub fn eval_expr(
                 )),
             }
         }
+        Expression::WhileLoop(condition_expr, body) => loop {
+            if let VariableValue::Boolean(condition) = eval_expr(variables, condition_expr)? {
+                match eval_expr(variables, body) {
+                    Ok(_) => (),
+                    Err(cmd) => match cmd {
+                        Command::Break(val) => break Ok(val),
+                        Command::Continue => continue,
+                        Command::Return(v) => return Err(Command::Return(v)),
+                        Command::Error(e) => return Err(Command::Error(e)),
+                    },
+                }
+                if !condition {
+                    break Ok(VariableValue::Unit);
+                }
+            }
+        },
         Expression::FunctionCall(func_expr, params) => eval_expr(variables, func_expr)?.call(
             params
                 .iter()
@@ -131,7 +157,15 @@ pub fn eval_expr(
         Expression::UnaryOperator(a, op) => evaluate_unary_op(eval_expr(variables, a)?, *op),
         Expression::IfElse(cond_expr, if_expr, else_expr) => {
             if let VariableValue::Boolean(cond) = eval_expr(variables, cond_expr)? {
-                eval_expr(variables, if cond { if_expr } else { else_expr })
+                if cond {
+                    eval_expr(variables, if_expr)
+                } else {
+                    if let Some(else_e) = else_expr {
+                        eval_expr(variables, else_e)
+                    } else {
+                        Ok(VariableValue::Unit)
+                    }
+                }
             } else {
                 Err(Command::Error("condition is not a boolean".into()))
             }
