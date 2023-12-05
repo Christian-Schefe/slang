@@ -148,6 +148,20 @@ pub fn eval_expr(
                 }
                 Ok(VariableValue::Unit)
             }
+            "split" => {
+                if let (Some(VariableValue::String(split)), Some(VariableValue::String(splitter))) =
+                    (target, params.get(0))
+                {
+                    Ok(VariableValue::List(
+                        split
+                            .split(splitter)
+                            .map(|s| VariableValue::String(s.to_string()))
+                            .collect(),
+                    ))
+                } else {
+                    Err(Command::Error("Invalid arguments for method split".into()))
+                }
+            }
             _ => Err(Command::Error("not a builtin function".into())),
         },
         Expression::BinaryOperator(a, b, op) => {
@@ -213,34 +227,20 @@ pub fn get_var<'a>(
     var_expr: &ReferenceExpr,
 ) -> Result<&'a mut VariableValue, Command> {
     match var_expr {
-        ReferenceExpr::Variable(ref var) => {
-            if let Some(val) = variables.get_mut(var) {
-                Ok(val)
-            } else {
-                Err(Command::Error(
-                    format!("Variable '{}' is not defined", var).into(),
-                ))
-            }
-        }
+        ReferenceExpr::Variable(ref var) => variables.get_mut(var).ok_or(Command::Error(
+            format!("Variable '{}' is not defined", var).into(),
+        )),
         ReferenceExpr::Index(list_expr, index_expr) => {
             let index = eval_expr(variables, index_expr)?;
             if let Expression::Reference(ref_expr) = list_expr {
                 let li = get_var(variables, ref_expr)?;
                 match (li, index) {
-                    (VariableValue::List(li_vec), VariableValue::Number(i)) => {
-                        if let Some(val) = li_vec.get_mut(i as usize) {
-                            Ok(val)
-                        } else {
-                            Err(Command::Error("Index is out of bounds".into()))
-                        }
-                    }
-                    (VariableValue::Object(obj_map), VariableValue::String(key)) => {
-                        if let Some(val) = obj_map.get_mut(&key) {
-                            Ok(val)
-                        } else {
-                            Err(Command::Error("Index is out of bounds".into()))
-                        }
-                    }
+                    (VariableValue::List(li_vec), VariableValue::Number(i)) => li_vec
+                        .get_mut(i as usize)
+                        .ok_or(Command::Error("Index is out of bounds".into())),
+                    (VariableValue::Object(obj_map), VariableValue::String(key)) => obj_map
+                        .get_mut(&key)
+                        .ok_or(Command::Error("Index is out of bounds".into())),
                     (_, _) => Err(Command::Error("Variable is not a list".into())),
                 }
             } else {
@@ -251,11 +251,8 @@ pub fn get_var<'a>(
             if let Expression::Reference(ref_expr) = object_expr {
                 let object = get_var(variables, ref_expr)?;
                 if let VariableValue::Object(ref mut obj) = object {
-                    if let Some(val) = obj.get_mut(index_expr) {
-                        Ok(val)
-                    } else {
-                        Err(Command::Error("Not a field of the object".into()))
-                    }
+                    obj.get_mut(index_expr)
+                        .ok_or(Command::Error("Not a field of the object".into()))
                 } else {
                     Err(Command::Error("Variable is not an object".into()))
                 }
@@ -270,115 +267,53 @@ pub fn get_var_cloned(
     var_expr: &ReferenceExpr,
 ) -> Result<VariableValue, Command> {
     match var_expr {
-        ReferenceExpr::Variable(ref var) => {
-            if let Some(val) = variables.get(var) {
-                Ok(val.clone())
-            } else {
-                match var.as_str() {
-                    "print" => Ok(VariableValue::Function(
-                        Vec::new(),
-                        Box::new(Expression::BuiltinFunctionCall(
-                            "print".to_string(),
-                            None,
-                            Vec::new(),
-                        )),
-                    )),
-                    _ => Err(Command::Error(
-                        format!("Variable '{}' is not defined", var).into(),
-                    )),
-                }
-            }
-        }
+        ReferenceExpr::Variable(ref var) => variables
+            .get(var)
+            .cloned()
+            .or_else(|| is_builtin(var, None))
+            .ok_or(Command::Error(
+                format!("Variable {} is not defined", var).into(),
+            )),
         ReferenceExpr::Index(list_expr, index_expr) => {
             let index = eval_expr(variables, index_expr)?;
-            if let Expression::Reference(ref_expr) = list_expr {
-                let li = get_var_cloned(variables, ref_expr)?;
-                match (li, index) {
-                    (VariableValue::List(li_vec), VariableValue::Number(i)) => {
-                        if let Some(val) = li_vec.get(i as usize) {
-                            Ok(val.clone())
-                        } else {
-                            Err(Command::Error("Index is out of bounds".into()))
-                        }
-                    }
-                    (VariableValue::Object(obj_map), VariableValue::String(key)) => {
-                        if let Some(val) = obj_map.get(&key) {
-                            Ok(val.clone())
-                        } else {
-                            Err(Command::Error("Index is out of bounds".into()))
-                        }
-                    }
-                    (_, _) => Err(Command::Error("Variable is not a list".into())),
-                }
+            let li = if let Expression::Reference(ref_expr) = list_expr {
+                get_var_cloned(variables, ref_expr)?
             } else {
-                let li = eval_expr(variables, list_expr)?;
-                match (li, index) {
-                    (VariableValue::List(li_vec), VariableValue::Number(i)) => {
-                        if let Some(val) = li_vec.get(i as usize) {
-                            Ok(val.clone())
-                        } else {
-                            Err(Command::Error("Index is out of bounds".into()))
-                        }
-                    }
-                    (VariableValue::Object(obj_map), VariableValue::String(key)) => {
-                        if let Some(val) = obj_map.get(&key) {
-                            Ok(val.clone())
-                        } else {
-                            Err(Command::Error("Index is out of bounds".into()))
-                        }
-                    }
-                    (_, _) => Err(Command::Error("Variable is not a list".into())),
-                }
+                eval_expr(variables, list_expr)?
+            };
+            match (li, index) {
+                (VariableValue::List(li_vec), VariableValue::Number(i)) => li_vec
+                    .get(i as usize)
+                    .cloned()
+                    .ok_or(Command::Error("Index out of bounds".into())),
+                (VariableValue::Object(obj_map), VariableValue::String(key)) => obj_map
+                    .get(&key)
+                    .cloned()
+                    .ok_or(Command::Error("Index out of bounds".into())),
+                (a, b) => Err(Command::Error(
+                    format!("{} cannot be indexed by {}", a, b).into(),
+                )),
             }
         }
         ReferenceExpr::Object(object_expr, index_expr) => {
-            if let Expression::Reference(ref_expr) = object_expr {
-                let object = get_var_cloned(variables, ref_expr)?;
-                if let VariableValue::Object(ref obj) = object {
-                    if let Some(val) = obj.get(index_expr) {
-                        return Ok(val.clone());
-                    }
-                }
-                match (object, index_expr.as_str()) {
-                    (obj, name) if is_builtin(name, Some(&obj)) => Ok(VariableValue::Function(
-                        Vec::new(),
-                        Box::new(Expression::BuiltinFunctionCall(
-                            name.to_string(),
-                            Some(obj.clone()),
-                            Vec::new(),
-                        )),
-                    )),
-                    (VariableValue::Object(_), field) => Err(Command::Error(
-                        format!("Identifier '{}' is not a field of the object", field).into(),
-                    )),
-                    (obj, _) => Err(Command::Error(
-                        format!("Variable '{}' is not an object", obj).into(),
-                    )),
-                }
+            let object = if let Expression::Reference(ref_expr) = object_expr {
+                get_var_cloned(variables, ref_expr)?
             } else {
-                let object = eval_expr(variables, object_expr)?;
-                if let VariableValue::Object(ref obj) = object {
-                    if let Some(val) = obj.get(index_expr) {
-                        return Ok(val.clone());
-                    }
-                }
-                match (object, index_expr.as_str()) {
-                    (obj, name) if is_builtin(name, Some(&obj)) => Ok(VariableValue::Function(
-                        Vec::new(),
-                        Box::new(Expression::BuiltinFunctionCall(
-                            name.to_string(),
-                            Some(obj.clone()),
-                            Vec::new(),
-                        )),
-                    )),
-                    (VariableValue::Object(_), field) => Err(Command::Error(
-                        format!("Identifier '{}' is not a field of the object", field).into(),
-                    )),
-                    (obj, _) => Err(Command::Error(
-                        format!("Variable '{}' is not an object", obj).into(),
-                    )),
+                eval_expr(variables, object_expr)?
+            };
+            if let VariableValue::Object(ref obj) = object {
+                if let Some(val) = obj.get(index_expr) {
+                    return Ok(val.clone());
                 }
             }
+            is_builtin(&index_expr, Some(&object)).ok_or(Command::Error(
+                if let VariableValue::Object(_) = object {
+                    format!("Identifier '{}' is not a field of the object", index_expr)
+                } else {
+                    format!("Variable '{}' is not an object", index_expr)
+                }
+                .into(),
+            ))
         }
     }
 }
@@ -390,37 +325,25 @@ pub fn assign_var(
 ) -> Result<VariableValue, Command> {
     let val = eval_expr(variables, expr)?;
     match var_expr {
-        ReferenceExpr::Variable(ref var) => {
-            if !variables.contains_key(var) {
-                Err(Command::Error("Variable is not defined".into()))
-            } else {
-                variables.insert(var.to_string(), val);
-                Ok(VariableValue::Unit)
-            }
-        }
+        ReferenceExpr::Variable(ref var) => assign_var_by_name(variables, var, val),
         ReferenceExpr::Index(list_expr, index_expr) => {
             let index = eval_expr(variables, index_expr)?;
             if let Expression::Reference(ref_expr) = list_expr {
                 let list = get_var(variables, ref_expr)?;
                 match (list, index) {
-                    (VariableValue::List(li_vec), VariableValue::Number(i)) => {
-                        if let Some(mut_index) = li_vec.get_mut(i as usize) {
-                            *mut_index = val;
-                            Ok(VariableValue::Unit)
-                        } else {
-                            Err(Command::Error("Index is out of bounds".into()))
-                        }
-                    }
-                    (VariableValue::Object(obj_map), VariableValue::String(key)) => {
-                        if let Some(mut_index) = obj_map.get_mut(&key) {
-                            *mut_index = val;
-                            Ok(VariableValue::Unit)
-                        } else {
-                            Err(Command::Error("Index is out of bounds".into()))
-                        }
-                    }
-                    (_, _) => Err(Command::Error("Variable is not a list".into())),
+                    (VariableValue::List(li_vec), VariableValue::Number(i)) => li_vec
+                        .get_mut(i as usize)
+                        .map(|v| *v = val)
+                        .ok_or(Command::Error("Index out of bounds".into())),
+                    (VariableValue::Object(obj_map), VariableValue::String(key)) => obj_map
+                        .get_mut(&key)
+                        .map(|v| *v = val)
+                        .ok_or(Command::Error("Index out of bounds".into())),
+                    (a, b) => Err(Command::Error(
+                        format!("{} cannot be indexed by {}", a, b).into(),
+                    )),
                 }
+                .map(|_| VariableValue::Unit)
             } else {
                 Err(Command::Error("Variable is not reference".into()))
             }
@@ -429,12 +352,11 @@ pub fn assign_var(
             if let Expression::Reference(ref_expr) = object_expr {
                 let object = get_var(variables, ref_expr)?;
                 if let VariableValue::Object(ref mut scope) = object {
-                    if let Some(mut_index) = scope.get_mut(index_expr) {
-                        *mut_index = val;
-                        Ok(VariableValue::Unit)
-                    } else {
-                        Err(Command::Error("Not a field of the object".into()))
-                    }
+                    scope
+                        .get_mut(index_expr)
+                        .map(|v| *v = val)
+                        .ok_or(Command::Error("Not a field of the object".into()))
+                        .map(|_| VariableValue::Unit)
                 } else {
                     Err(Command::Error("Variable is not an object".into()))
                 }

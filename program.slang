@@ -30,3 +30,6 @@ let z = true;
 
 let w = |a, b| a + b;
 print(x, y, z, w); # prints '5 hi true ["a", "b"] -> Value(Unit)'
+
+let as = "hello world, is nigh";
+print(as.split(" "));

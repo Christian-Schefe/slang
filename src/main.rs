@@ -54,9 +54,21 @@ fn read_program_file() -> Result<String, ClientError> {
     Ok(program)
 }
 
-pub fn is_builtin(name: &str, target: Option<&VariableValue>) -> bool {
-    match (target, name) {
+pub fn is_builtin(name: &str, target: Option<&VariableValue>) -> Option<VariableValue> {
+    if match (target, name) {
         (_, "print") => true,
+        (Some(VariableValue::String(_)), "split") => true,
         (_, _) => false,
+    } {
+        Some(VariableValue::Function(
+            Vec::new(),
+            Box::new(Expression::BuiltinFunctionCall(
+                name.to_string(),
+                target.cloned(),
+                Vec::new(),
+            )),
+        ))
+    } else {
+        None
     }
 }
