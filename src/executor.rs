@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use crate::*;
+use crate::{
+    builtin_functions::{exec_builtin, is_builtin},
+    *,
+};
 
 pub enum Command {
     Return(VariableValue),
@@ -112,6 +115,9 @@ pub fn eval_expr(
         }
         Expression::WhileLoop(condition_expr, body) => loop {
             if let VariableValue::Boolean(condition) = eval_expr(variables, condition_expr)? {
+                if !condition {
+                    break Ok(VariableValue::Unit);
+                }
                 match eval_expr(variables, body) {
                     Ok(_) => (),
                     Err(cmd) => match cmd {
@@ -121,9 +127,6 @@ pub fn eval_expr(
                         Command::Error(e) => return Err(Command::Error(e)),
                     },
                 }
-                if !condition {
-                    break Ok(VariableValue::Unit);
-                }
             }
         },
         Expression::FunctionCall(func_expr, params) => eval_expr(variables, func_expr)?.call(
@@ -132,38 +135,7 @@ pub fn eval_expr(
                 .map(|v| eval_expr(variables, v))
                 .collect::<Result<Vec<VariableValue>, Command>>()?,
         ),
-        Expression::BuiltinFunctionCall(name, target, params) => match name.as_str() {
-            "print" => {
-                if let Some(print_target) = target {
-                    println!("{}", print_target)
-                } else {
-                    for (i, val) in params.iter().enumerate() {
-                        if i == 0 {
-                            print!("{}", val)
-                        } else {
-                            print!(" {}", val)
-                        }
-                    }
-                    println!();
-                }
-                Ok(VariableValue::Unit)
-            }
-            "split" => {
-                if let (Some(VariableValue::String(split)), Some(VariableValue::String(splitter))) =
-                    (target, params.get(0))
-                {
-                    Ok(VariableValue::List(
-                        split
-                            .split(splitter)
-                            .map(|s| VariableValue::String(s.to_string()))
-                            .collect(),
-                    ))
-                } else {
-                    Err(Command::Error("Invalid arguments for method split".into()))
-                }
-            }
-            _ => Err(Command::Error("not a builtin function".into())),
-        },
+        Expression::BuiltinFunctionCall(name, target, params) => exec_builtin(name, target, params),
         Expression::BinaryOperator(a, b, op) => {
             evaluate_binary_op(eval_expr(variables, a)?, eval_expr(variables, b)?, *op)
                 .map_err(|v| Command::Error(v))
@@ -286,6 +258,11 @@ pub fn get_var_cloned(
                     .get(i as usize)
                     .cloned()
                     .ok_or(Command::Error("Index out of bounds".into())),
+                (VariableValue::String(stri), VariableValue::Number(i)) => stri
+                    .chars()
+                    .nth(i as usize)
+                    .map(|v| VariableValue::String(v.to_string()))
+                    .ok_or(Command::Error("Index out of bounds".into())),
                 (VariableValue::Object(obj_map), VariableValue::String(key)) => obj_map
                     .get(&key)
                     .cloned()
@@ -310,7 +287,7 @@ pub fn get_var_cloned(
                 if let VariableValue::Object(_) = object {
                     format!("Identifier '{}' is not a field of the object", index_expr)
                 } else {
-                    format!("Variable '{}' is not an object", index_expr)
+                    format!("Variable '{}' is not an object", object)
                 }
                 .into(),
             ))
