@@ -13,66 +13,60 @@ pub enum Command {
 }
 
 pub fn exec_stmnts(
-    variables: &mut HashMap<String, VariableValue>,
+    scope: &mut Scope,
     stmnts: &[Statement],
 ) -> Result<Option<VariableValue>, Command> {
     for stmnt in stmnts {
-        if let Some(return_val) = exec_stmnt(variables, stmnt)? {
+        if let Some(return_val) = exec_stmnt(scope, stmnt)? {
             return Ok(Some(return_val));
         }
     }
     Ok(None)
 }
 
-pub fn exec_stmnt(
-    variables: &mut HashMap<String, VariableValue>,
-    stmnt: &Statement,
-) -> Result<Option<VariableValue>, Command> {
+pub fn exec_stmnt(scope: &mut Scope, stmnt: &Statement) -> Result<Option<VariableValue>, Command> {
     info!("exec: {:?}", stmnt);
     match stmnt {
-        Statement::VariableDefinition(var, val) => define_var(variables, var, val).map(|_| None),
-        Statement::VariableAssignment(var, val) => assign_var(variables, var, val).map(|_| None),
-        Statement::Expr(expr) => eval_expr(variables, expr).map(|_| None),
-        Statement::Return(expr) => Err(Command::Return(eval_expr(variables, expr)?)),
-        Statement::Break(expr) => Err(Command::Break(eval_expr(variables, expr)?)),
+        Statement::VariableDefinition(var, val) => define_var(scope, var, val).map(|_| None),
+        Statement::VariableAssignment(var, val) => assign_var(scope, var, val).map(|_| None),
+        Statement::Expr(expr) => eval_expr(scope, expr).map(|_| None),
+        Statement::Return(expr) => Err(Command::Return(eval_expr(scope, expr)?)),
+        Statement::Break(expr) => Err(Command::Break(eval_expr(scope, expr)?)),
         Statement::Continue => Err(Command::Continue),
         Statement::ImplicitReturn(expr) => {
-            eval_expr(variables, expr).map(|return_val| Some(return_val))
+            eval_expr(scope, expr).map(|return_val| Some(return_val))
         }
     }
 }
 
-pub fn eval_expr(
-    variables: &mut HashMap<String, VariableValue>,
-    expr: &Expression,
-) -> Result<VariableValue, Command> {
+pub fn eval_expr(scope: &mut Scope, expr: &Expression) -> Result<VariableValue, Command> {
     match expr {
         Expression::Block(stmnts) => {
-            exec_stmnts(variables, stmnts).map(|v| v.unwrap_or(VariableValue::Unit))
+            exec_stmnts(scope, stmnts).map(|v| v.unwrap_or(VariableValue::Unit))
         }
 
         Expression::List(list) => Ok(VariableValue::List(
             list.iter()
-                .map(|v| eval_expr(variables, v))
+                .map(|v| eval_expr(scope, v))
                 .collect::<Result<Vec<VariableValue>, Command>>()?,
         )),
         Expression::Object(fields) => Ok(VariableValue::Object(
             fields
                 .iter()
-                .map(|(key, v)| eval_expr(variables, v).map(|r| (key.clone(), r)))
+                .map(|(key, v)| eval_expr(scope, v).map(|r| (key.clone(), r)))
                 .collect::<Result<HashMap<String, VariableValue>, Command>>()?,
         )),
         Expression::Value(var) => Ok(var.clone()),
-        Expression::Reference(ref_expr) => get_var_cloned(variables, ref_expr),
+        Expression::Reference(ref_expr) => get_var_cloned(scope, ref_expr),
         Expression::ForLoop(var_name, iterator, body) => {
-            let iter = eval_expr(variables, iterator)?; //TODO: don't accept commands!
+            let iter = eval_expr(scope, iterator)?; //TODO: don't accept commands!
             match iter {
                 VariableValue::List(list) => {
-                    define_var_by_val(variables, &var_name, VariableValue::Unit)?;
+                    define_var_by_val(scope, &var_name, VariableValue::Unit)?;
                     let mut result = VariableValue::Unit;
                     for val in list {
-                        assign_var_by_name(variables, &var_name, val)?;
-                        match eval_expr(variables, body) {
+                        assign_var_by_name(scope, &var_name, val)?;
+                        match eval_expr(scope, body) {
                             Ok(_) => (),
                             Err(cmd) => match cmd {
                                 Command::Break(v) => {
@@ -88,11 +82,11 @@ pub fn eval_expr(
                     Ok(result)
                 }
                 VariableValue::Object(object) => {
-                    define_var_by_val(variables, &var_name, VariableValue::Unit)?;
+                    define_var_by_val(scope, &var_name, VariableValue::Unit)?;
                     let mut result = VariableValue::Unit;
                     for (key, _) in object {
-                        assign_var_by_name(variables, &var_name, VariableValue::String(key))?;
-                        match eval_expr(variables, body) {
+                        assign_var_by_name(scope, &var_name, VariableValue::String(key))?;
+                        match eval_expr(scope, body) {
                             Ok(_) => (),
                             Err(cmd) => match cmd {
                                 Command::Break(v) => {
@@ -114,11 +108,11 @@ pub fn eval_expr(
             }
         }
         Expression::WhileLoop(condition_expr, body) => loop {
-            if let VariableValue::Boolean(condition) = eval_expr(variables, condition_expr)? {
+            if let VariableValue::Boolean(condition) = eval_expr(scope, condition_expr)? {
                 if !condition {
                     break Ok(VariableValue::Unit);
                 }
-                match eval_expr(variables, body) {
+                match eval_expr(scope, body) {
                     Ok(_) => (),
                     Err(cmd) => match cmd {
                         Command::Break(val) => break Ok(val),
@@ -129,25 +123,28 @@ pub fn eval_expr(
                 }
             }
         },
-        Expression::FunctionCall(func_expr, params) => eval_expr(variables, func_expr)?.call(
-            params
+        Expression::FunctionCall(func_expr, params) => {
+            let p = params
                 .iter()
-                .map(|v| eval_expr(variables, v))
-                .collect::<Result<Vec<VariableValue>, Command>>()?,
-        ),
-        Expression::BuiltinFunctionCall(name, target, params) => exec_builtin(name, target, params),
+                .map(|v| eval_expr(scope, v))
+                .collect::<Result<Vec<VariableValue>, Command>>()?;
+            eval_expr(scope, func_expr)?.call(scope, p)
+        }
+        Expression::BuiltinFunctionCall(name, target, params) => {
+            exec_builtin(scope, name, target, params)
+        }
         Expression::BinaryOperator(a, b, op) => {
-            evaluate_binary_op(eval_expr(variables, a)?, eval_expr(variables, b)?, *op)
+            evaluate_binary_op(eval_expr(scope, a)?, eval_expr(scope, b)?, *op)
                 .map_err(|v| Command::Error(v))
         }
-        Expression::UnaryOperator(a, op) => evaluate_unary_op(eval_expr(variables, a)?, *op),
+        Expression::UnaryOperator(a, op) => evaluate_unary_op(eval_expr(scope, a)?, *op),
         Expression::IfElse(cond_expr, if_expr, else_expr) => {
-            if let VariableValue::Boolean(cond) = eval_expr(variables, cond_expr)? {
+            if let VariableValue::Boolean(cond) = eval_expr(scope, cond_expr)? {
                 if cond {
-                    eval_expr(variables, if_expr)
+                    eval_expr(scope, if_expr)
                 } else {
                     if let Some(else_e) = else_expr {
-                        eval_expr(variables, else_e)
+                        eval_expr(scope, else_e)
                     } else {
                         Ok(VariableValue::Unit)
                     }
@@ -160,52 +157,40 @@ pub fn eval_expr(
 }
 
 pub fn define_var(
-    variables: &mut HashMap<String, VariableValue>,
+    scope: &mut Scope,
     var: &str,
     expr: &Expression,
 ) -> Result<VariableValue, Command> {
-    let val = eval_expr(variables, expr)?;
-    define_var_by_val(variables, var, val)
+    let val = eval_expr(scope, expr)?;
+    define_var_by_val(scope, var, val)
 }
 
 pub fn define_var_by_val(
-    variables: &mut HashMap<String, VariableValue>,
+    scope: &mut Scope,
     var: &str,
     val: VariableValue,
 ) -> Result<VariableValue, Command> {
-    if variables.contains_key(var) {
-        Err(Command::Error("Variable is already defined".into()))
-    } else {
-        variables.insert(var.to_string(), val);
-        Ok(VariableValue::Unit)
-    }
+    define_var_in_scope(scope, var, val).map(|_| VariableValue::Unit)
 }
 
 pub fn assign_var_by_name(
-    variables: &mut HashMap<String, VariableValue>,
+    scope: &mut Scope,
     var: &str,
     val: VariableValue,
 ) -> Result<VariableValue, Command> {
-    if !variables.contains_key(var) {
-        Err(Command::Error("Variable is not defined".into()))
-    } else {
-        variables.insert(var.to_string(), val);
-        Ok(VariableValue::Unit)
-    }
+    assign_var_in_scope(scope, var, val).map(|_| VariableValue::Unit)
 }
 
 pub fn get_var<'a>(
-    variables: &'a mut HashMap<String, VariableValue>,
+    scope: &'a mut Scope,
     var_expr: &ReferenceExpr,
 ) -> Result<&'a mut VariableValue, Command> {
     match var_expr {
-        ReferenceExpr::Variable(ref var) => variables.get_mut(var).ok_or(Command::Error(
-            format!("Variable '{}' is not defined", var).into(),
-        )),
+        ReferenceExpr::Variable(ref var) => get_var_from_scope(scope, var),
         ReferenceExpr::Index(list_expr, index_expr) => {
-            let index = eval_expr(variables, index_expr)?;
+            let index = eval_expr(scope, index_expr)?;
             if let Expression::Reference(ref_expr) = list_expr {
-                let li = get_var(variables, ref_expr)?;
+                let li = get_var(scope, ref_expr)?;
                 match (li, index) {
                     (VariableValue::List(li_vec), VariableValue::Number(i)) => li_vec
                         .get_mut(i as usize)
@@ -221,7 +206,7 @@ pub fn get_var<'a>(
         }
         ReferenceExpr::Object(object_expr, index_expr) => {
             if let Expression::Reference(ref_expr) = object_expr {
-                let object = get_var(variables, ref_expr)?;
+                let object = get_var(scope, ref_expr)?;
                 if let VariableValue::Object(ref mut obj) = object {
                     obj.get_mut(index_expr)
                         .ok_or(Command::Error("Not a field of the object".into()))
@@ -235,23 +220,19 @@ pub fn get_var<'a>(
     }
 }
 pub fn get_var_cloned(
-    variables: &mut HashMap<String, VariableValue>,
+    scope: &mut Scope,
     var_expr: &ReferenceExpr,
 ) -> Result<VariableValue, Command> {
     match var_expr {
-        ReferenceExpr::Variable(ref var) => variables
-            .get(var)
-            .cloned()
-            .or_else(|| is_builtin(var, None))
-            .ok_or(Command::Error(
-                format!("Variable {} is not defined", var).into(),
-            )),
+        ReferenceExpr::Variable(ref var) => {
+            get_var_from_scope_cloned(scope, var).or_else(|e| is_builtin(var, None).ok_or(e))
+        }
         ReferenceExpr::Index(list_expr, index_expr) => {
-            let index = eval_expr(variables, index_expr)?;
+            let index = eval_expr(scope, index_expr)?;
             let li = if let Expression::Reference(ref_expr) = list_expr {
-                get_var_cloned(variables, ref_expr)?
+                get_var_cloned(scope, ref_expr)?
             } else {
-                eval_expr(variables, list_expr)?
+                eval_expr(scope, list_expr)?
             };
             match (li, index) {
                 (VariableValue::List(li_vec), VariableValue::Number(i)) => li_vec
@@ -274,9 +255,9 @@ pub fn get_var_cloned(
         }
         ReferenceExpr::Object(object_expr, index_expr) => {
             let object = if let Expression::Reference(ref_expr) = object_expr {
-                get_var_cloned(variables, ref_expr)?
+                get_var_cloned(scope, ref_expr)?
             } else {
-                eval_expr(variables, object_expr)?
+                eval_expr(scope, object_expr)?
             };
             if let VariableValue::Object(ref obj) = object {
                 if let Some(val) = obj.get(index_expr) {
@@ -296,17 +277,17 @@ pub fn get_var_cloned(
 }
 
 pub fn assign_var(
-    variables: &mut HashMap<String, VariableValue>,
+    scope: &mut Scope,
     var_expr: &ReferenceExpr,
     expr: &Expression,
 ) -> Result<VariableValue, Command> {
-    let val = eval_expr(variables, expr)?;
+    let val = eval_expr(scope, expr)?;
     match var_expr {
-        ReferenceExpr::Variable(ref var) => assign_var_by_name(variables, var, val),
+        ReferenceExpr::Variable(ref var) => assign_var_by_name(scope, var, val),
         ReferenceExpr::Index(list_expr, index_expr) => {
-            let index = eval_expr(variables, index_expr)?;
+            let index = eval_expr(scope, index_expr)?;
             if let Expression::Reference(ref_expr) = list_expr {
-                let list = get_var(variables, ref_expr)?;
+                let list = get_var(scope, ref_expr)?;
                 match (list, index) {
                     (VariableValue::List(li_vec), VariableValue::Number(i)) => li_vec
                         .get_mut(i as usize)
@@ -327,7 +308,7 @@ pub fn assign_var(
         }
         ReferenceExpr::Object(object_expr, index_expr) => {
             if let Expression::Reference(ref_expr) = object_expr {
-                let object = get_var(variables, ref_expr)?;
+                let object = get_var(scope, ref_expr)?;
                 if let VariableValue::Object(ref mut scope) = object {
                     scope
                         .get_mut(index_expr)

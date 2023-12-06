@@ -4,15 +4,17 @@ use errors::*;
 use executor::*;
 use log::{error, info};
 use parser::*;
+use scope::*;
 use tokenizer::*;
 use variables::*;
 
+mod builtin_functions;
 mod errors;
 mod executor;
 mod parser;
+mod scope;
 mod tokenizer;
 mod variables;
-mod builtin_functions;
 
 fn main() {
     env_logger::builder()
@@ -35,8 +37,8 @@ fn run() -> Result<(), Error> {
     info!("reduced: {:?}", reduced);
 
     let statements = get_statements(&reduced)?;
-    let mut variables = HashMap::new();
-    let result = exec_stmnts(&mut variables, &statements);
+    let mut scope = vec![HashMap::new()];
+    let result = exec_stmnts(&mut scope, &statements);
     // info!("variables: {:?}", variables);
 
     if let Err(Command::Error(e)) = result {

@@ -1,8 +1,9 @@
 use std::{collections::HashMap, fs};
 
-use crate::{executor::Command, parser::Expression, variables::VariableValue};
+use crate::{executor::Command, parser::Expression, variables::VariableValue, scope::Scope};
 
 pub fn exec_builtin(
+    scope: &mut Scope,
     name: &str,
     target: &Option<VariableValue>,
     params: &Vec<VariableValue>,
@@ -97,21 +98,26 @@ pub fn exec_builtin(
                 match target {
                     Some(VariableValue::List(li)) => li
                         .iter()
-                        .map(|el| params[0].call(vec![el.clone()]))
+                        .map(|el| params[0].call(scope, vec![el.clone()]))
                         .collect::<Result<Vec<VariableValue>, Command>>()
                         .map(|v| VariableValue::List(v)),
                     Some(VariableValue::Object(li)) => li
                         .iter()
                         .map(|(key, el)| {
                             params[0]
-                                .call(vec![VariableValue::String(key.to_string()), el.clone()])
+                                .call(
+                                    scope,
+                                    vec![VariableValue::String(key.to_string()), el.clone()],
+                                )
                                 .map(|res| (key.to_string(), res))
                         })
                         .collect::<Result<HashMap<String, VariableValue>, Command>>()
                         .map(|v| VariableValue::Object(v)),
                     Some(VariableValue::String(li)) => li
                         .chars()
-                        .map(|el| params[0].call(vec![VariableValue::String(el.to_string())]))
+                        .map(|el| {
+                            params[0].call(scope, vec![VariableValue::String(el.to_string())])
+                        })
                         .collect::<Result<Vec<VariableValue>, Command>>()
                         .map(|v| VariableValue::List(v)),
                     _ => Err(Command::Error("invalid target for map".into())),
@@ -131,7 +137,7 @@ pub fn exec_builtin(
                 match target {
                     Some(VariableValue::List(li)) => li
                         .iter()
-                        .filter_map(|el| match params[0].call(vec![el.clone()]) {
+                        .filter_map(|el| match params[0].call(scope, vec![el.clone()]) {
                             Err(e) => Some(Err(e)),
                             Ok(VariableValue::Boolean(b)) if b => Some(Ok(el.clone())),
                             Ok(VariableValue::Boolean(_)) => None,
@@ -142,9 +148,10 @@ pub fn exec_builtin(
                     Some(VariableValue::Object(li)) => li
                         .iter()
                         .filter_map(|(key, el)| {
-                            match params[0]
-                                .call(vec![VariableValue::String(key.to_string()), el.clone()])
-                            {
+                            match params[0].call(
+                                scope,
+                                vec![VariableValue::String(key.to_string()), el.clone()],
+                            ) {
                                 Err(e) => Some(Err(e)),
                                 Ok(VariableValue::Boolean(b)) if b => {
                                     Some(Ok((key.to_string(), el.clone())))
@@ -158,7 +165,8 @@ pub fn exec_builtin(
                     Some(VariableValue::String(li)) => li
                         .chars()
                         .filter_map(|el| {
-                            match params[0].call(vec![VariableValue::String(el.to_string())]) {
+                            match params[0].call(scope, vec![VariableValue::String(el.to_string())])
+                            {
                                 Err(e) => Some(Err(e)),
                                 Ok(VariableValue::Boolean(b)) if b => {
                                     Some(Ok(VariableValue::String(el.to_string())))

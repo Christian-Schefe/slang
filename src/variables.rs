@@ -97,20 +97,25 @@ impl Display for VariableValue {
 }
 
 impl VariableValue {
-    pub fn call(&self, params: Vec<VariableValue>) -> Result<VariableValue, Command> {
-        match self {
+    pub fn call(
+        &self,
+        scope: &mut Scope,
+        params: Vec<VariableValue>,
+    ) -> Result<VariableValue, Command> {
+        let result = match self {
             VariableValue::Function(args, body) => {
-                let mut variables = HashMap::new();
+                enter_scope(scope);
                 for (var, val) in args.iter().zip(params.iter()) {
-                    define_var_by_val(&mut variables, var, val.clone())?;
+                    define_var_by_val(scope, var, val.clone())?;
                 }
-                define_var_by_val(&mut variables, "self", self.clone())?;
+                define_var_by_val(scope, "self", self.clone())?;
+                println!("{:?}", scope);
                 match match *body.clone() {
                     Expression::BuiltinFunctionCall(name, target, _) => {
                         let new_body = Expression::BuiltinFunctionCall(name, target, params);
-                        eval_expr(&mut variables, &new_body)
+                        eval_expr(scope, &new_body)
                     }
-                    any_body => eval_expr(&mut variables, &any_body),
+                    any_body => eval_expr(scope, &any_body),
                 } {
                     Ok(val) => Ok(val),
                     Err(command) => match command {
@@ -128,8 +133,11 @@ impl VariableValue {
             _ => Err(Command::Error(
                 format!("variable {} is not callable", self).into(),
             )),
-        }
+        };
+        exit_scope(scope);
+        result
     }
+
     pub fn get_type(&self) -> String {
         match self {
             VariableValue::Boolean(_) => "Boolean",
