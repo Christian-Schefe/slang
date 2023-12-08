@@ -25,33 +25,31 @@ pub fn exec_builtin(
             Ok(VariableValue::Unit)
         }
         "range" => {
-            if params.len() < 1 {
-                Err(Command::Error(
+            if let (
+                VariableValue::Number(start),
+                VariableValue::Number(stop),
+                VariableValue::Number(step),
+            ) = match params.len() {
+                1 => Ok((
+                    &VariableValue::Number(0),
+                    &params[0],
+                    &VariableValue::Number(1),
+                )),
+                2 => Ok((&params[0], &params[1], &VariableValue::Number(1))),
+                3 => Ok((&params[0], &params[1], &params[2])),
+                _ => Err(Command::Error(
                     "Invalid parameter amount for function 'range'".into(),
-                ))
-            } else {
-                if let (
-                    VariableValue::Number(start),
-                    VariableValue::Number(stop),
-                    VariableValue::Number(step),
-                ) = match params.len() {
-                    1 => Ok((
-                        &VariableValue::Number(0),
-                        &params[0],
-                        &VariableValue::Number(1),
-                    )),
-                    2 => Ok((&params[0], &params[1], &VariableValue::Number(1))),
-                    3 => Ok((&params[0], &params[1], &params[2])),
-                    _ => Err(Command::Error("invalid parameter count".into())),
-                }? {
-                    let mut l = Vec::with_capacity(((stop - start) / step).try_into().unwrap());
-                    for i in (*start..*stop).step_by((*step).try_into().unwrap()) {
-                        l.push(VariableValue::Number(i))
-                    }
-                    Ok(VariableValue::List(l))
-                } else {
-                    Err(Command::Error("invalid parameter count".into()))
+                )),
+            }? {
+                let mut l = Vec::with_capacity(((stop - start) / step).try_into().unwrap());
+                for i in (*start..*stop).step_by((*step).try_into().unwrap()) {
+                    l.push(VariableValue::Number(i))
                 }
+                Ok(VariableValue::List(l))
+            } else {
+                Err(Command::Error(
+                    "Invalid parameter types for function 'range'".into(),
+                ))
             }
         }
         "int" => {

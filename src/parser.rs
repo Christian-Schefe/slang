@@ -284,15 +284,20 @@ pub fn get_expr(t: &[PartialParsed]) -> Result<Expression, SyntaxError> {
                 return Err(format!("invalid for loop: {:?}", t).into());
             }
             let iterator = get_expr(&t[3..t.len() - 1])?;
-            if let Expression::Block(body) = get_expr(&t[t.len() - 1..])? {
-                return Ok(Expression::ForLoop(
+            let body_expr = get_expr(&t[t.len() - 1..])?;
+            return match body_expr {
+                Expression::Block(body) => Ok(Expression::ForLoop(
                     var_name.to_string(),
                     Box::new(iterator),
                     Box::new(Expression::Block(body)),
-                ));
-            } else {
-                return Err(format!("invalid for loop body: {:?}", t).into());
-            }
+                )),
+                Expression::Value(VariableValue::Object(map)) if map.len() == 0 => Ok(Expression::ForLoop(
+                    var_name.to_string(),
+                    Box::new(iterator),
+                    Box::new(Expression::Block(Vec::new())),
+                )),
+                _ => Err(format!("invalid for loop body: {:?}", t).into()),
+            };
         } else {
             return Err(format!("invalid for loop: {:?}", t).into());
         }

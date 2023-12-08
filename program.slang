@@ -1,9 +1,7 @@
-
-
 let bc = |_| {
     let a = 5;
     let ac = |_| {
-        print(a)
+        let y = a;
     };
     ac
 };
@@ -11,6 +9,7 @@ let bc = |_| {
 let a = 3;
 bc()();
 
-for i in range(3, 50, 3) {
-    print(i);
-}
+for i in range(3, 100000) {
+    bc()();
+};
+print("4")
