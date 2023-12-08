@@ -109,7 +109,6 @@ impl VariableValue {
                     define_var_by_val(scope, var, val.clone())?;
                 }
                 define_var_by_val(scope, "self", self.clone())?;
-                println!("{:?}", scope);
                 match match *body.clone() {
                     Expression::BuiltinFunctionCall(name, target, _) => {
                         let new_body = Expression::BuiltinFunctionCall(name, target, params);

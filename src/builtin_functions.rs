@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fs};
 
-use crate::{executor::Command, parser::Expression, variables::VariableValue, scope::Scope};
+use crate::{executor::Command, parser::Expression, scope::Scope, variables::VariableValue};
 
 pub fn exec_builtin(
     scope: &mut Scope,
@@ -23,6 +23,36 @@ pub fn exec_builtin(
                 println!();
             }
             Ok(VariableValue::Unit)
+        }
+        "range" => {
+            if params.len() < 1 {
+                Err(Command::Error(
+                    "Invalid parameter amount for function 'range'".into(),
+                ))
+            } else {
+                if let (
+                    VariableValue::Number(start),
+                    VariableValue::Number(stop),
+                    VariableValue::Number(step),
+                ) = match params.len() {
+                    1 => Ok((
+                        &VariableValue::Number(0),
+                        &params[0],
+                        &VariableValue::Number(1),
+                    )),
+                    2 => Ok((&params[0], &params[1], &VariableValue::Number(1))),
+                    3 => Ok((&params[0], &params[1], &params[2])),
+                    _ => Err(Command::Error("invalid parameter count".into())),
+                }? {
+                    let mut l = Vec::with_capacity(((stop - start) / step).try_into().unwrap());
+                    for i in (*start..*stop).step_by((*step).try_into().unwrap()) {
+                        l.push(VariableValue::Number(i))
+                    }
+                    Ok(VariableValue::List(l))
+                } else {
+                    Err(Command::Error("invalid parameter count".into()))
+                }
+            }
         }
         "int" => {
             if params.len() != 1 {
@@ -194,6 +224,7 @@ pub fn is_builtin(name: &str, target: Option<&VariableValue>) -> Option<Variable
         (_, "int") => true,
         (_, "read") => true,
         (_, "lines") => true,
+        (_, "range") => true,
         (Some(VariableValue::String(_)), "split") => true,
         (Some(VariableValue::String(_)), "map") => true,
         (Some(VariableValue::List(_)), "map") => true,

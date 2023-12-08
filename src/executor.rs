@@ -42,7 +42,10 @@ pub fn exec_stmnt(scope: &mut Scope, stmnt: &Statement) -> Result<Option<Variabl
 pub fn eval_expr(scope: &mut Scope, expr: &Expression) -> Result<VariableValue, Command> {
     match expr {
         Expression::Block(stmnts) => {
-            exec_stmnts(scope, stmnts).map(|v| v.unwrap_or(VariableValue::Unit))
+            enter_scope(scope);
+            let result = exec_stmnts(scope, stmnts).map(|v| v.unwrap_or(VariableValue::Unit));
+            exit_scope(scope);
+            result
         }
 
         Expression::List(list) => Ok(VariableValue::List(
