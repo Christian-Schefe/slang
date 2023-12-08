@@ -107,6 +107,33 @@ pub fn exec_builtin(
                 Err(Command::Error("Cannot convert to list".into()))
             }
         }
+        "obj" => {
+            if params.len() != 1 {
+                Err(Command::Error(
+                    "Invalid parameter amount for function 'obj'".into(),
+                ))
+            } else if let Some(VariableValue::List(val)) = params.get(0) {
+                Ok(VariableValue::Object(
+                    val.iter()
+                        .map(|c| {
+                            if let VariableValue::List(a) = c {
+                                if let (Some(VariableValue::String(var_name)), Some(val)) =
+                                    (a.get(0), a.get(1))
+                                {
+                                    Ok((var_name.to_string(), val.clone()))
+                                } else {
+                                    Err(Command::Error("Cannot construct an object without String Keys".into()))
+                                }
+                            } else {
+                                Err(Command::Error("".into()))
+                            }
+                        })
+                        .collect::<Result<HashMap<String, VariableValue>, Command>>()?,
+                ))
+            } else {
+                Err(Command::Error("Cannot convert to object".into()))
+            }
+        }
         "split" => {
             if let (Some(VariableValue::String(split)), Some(VariableValue::String(splitter))) =
                 (target, params.get(0))
