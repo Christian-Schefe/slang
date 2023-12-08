@@ -12,4 +12,8 @@ bc()();
 for i in range(3, 100000) {
     bc()();
 };
+print(i);
+i = 0;
+while i < 4 {
+};
 print("4")

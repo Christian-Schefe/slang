@@ -291,11 +291,13 @@ pub fn get_expr(t: &[PartialParsed]) -> Result<Expression, SyntaxError> {
                     Box::new(iterator),
                     Box::new(Expression::Block(body)),
                 )),
-                Expression::Value(VariableValue::Object(map)) if map.len() == 0 => Ok(Expression::ForLoop(
-                    var_name.to_string(),
-                    Box::new(iterator),
-                    Box::new(Expression::Block(Vec::new())),
-                )),
+                Expression::Value(VariableValue::Object(map)) if map.len() == 0 => {
+                    Ok(Expression::ForLoop(
+                        var_name.to_string(),
+                        Box::new(iterator),
+                        Box::new(Expression::Block(Vec::new())),
+                    ))
+                }
                 _ => Err(format!("invalid for loop body: {:?}", t).into()),
             };
         } else {
@@ -312,14 +314,20 @@ pub fn get_expr(t: &[PartialParsed]) -> Result<Expression, SyntaxError> {
                 return Err(format!("invalid while loop: {:?}", t).into());
             }
             let condition = get_expr(&t[1..t.len() - 1])?;
-            if let Expression::Block(body) = get_expr(&t[t.len() - 1..])? {
-                return Ok(Expression::WhileLoop(
+            let body_expr = get_expr(&t[t.len() - 1..])?;
+            return match body_expr {
+                Expression::Block(body) => Ok(Expression::WhileLoop(
                     Box::new(condition),
                     Box::new(Expression::Block(body)),
-                ));
-            } else {
-                return Err(format!("invalid while loop body: {:?}", t).into());
-            }
+                )),
+                Expression::Value(VariableValue::Object(map)) if map.len() == 0 => {
+                    Ok(Expression::WhileLoop(
+                        Box::new(condition),
+                        Box::new(Expression::Block(Vec::new())),
+                    ))
+                }
+                _ => Err(format!("invalid while loop body: {:?}", t).into()),
+            };
         } else {
             return Err(format!("invalid while loop: {:?}", t).into());
         }
