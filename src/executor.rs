@@ -15,19 +15,20 @@ pub enum Command {
 
 pub fn execute_program(
     program: String,
+    cwd: String,
 ) -> Result<(VariableValue, Vec<HashMap<String, VariableValue>>), Error> {
     let tokens = tokenize(&program)?;
     let reduced = reduce_brackets_and_parenths(&tokens)?;
 
     let statements = get_statements(&reduced)?;
     let mut scope = vec![HashMap::new()];
+    scope.get_mut(0).unwrap().insert("cwd".to_string(), VariableValue::String(cwd));
     let r = match exec_stmnts(&mut scope, &statements) {
         Ok(v) => Ok(v.unwrap_or(VariableValue::Unit)),
         Err(Command::Error(e)) => Err(e.into()),
         Err(Command::Return(v)) => Ok(v),
         Err(cmd) => Err(RuntimeError(format!("Command {:?} cannot leave module", cmd)).into()),
     };
-    println!("{:?}", scope);
     r.map(|v| (v, scope))
 }
 

@@ -1,10 +1,10 @@
-use std::{collections::HashMap, fs};
+use std::{collections::HashMap, fs, path::Path};
 
 use crate::{
     errors::RuntimeError,
     executor::{execute_program, Command},
     parser::Expression,
-    scope::Scope,
+    scope::{get_var_from_scope_cloned, Scope},
     variables::VariableValue,
 };
 
@@ -104,9 +104,23 @@ pub fn exec_builtin(
                     "Invalid parameter amount for function 'import'".into(),
                 ))
             } else if let Some(VariableValue::String(val)) = params.get(0) {
-                let program = fs::read_to_string(val)
+                let cwd_str = get_var_from_scope_cloned(scope, "cwd").and_then(|v| match v {
+                    VariableValue::String(s) => Ok(s),
+                    _ => Err(Command::Error("".into())),
+                })?;
+                let cwd = Path::new(&cwd_str);
+
+                let new_cwd = cwd
+                    .join(val)
+                    .parent()
+                    .unwrap()
+                    .as_os_str()
+                    .to_str()
+                    .unwrap()
+                    .to_string();
+                let program = fs::read_to_string(cwd.join(val))
                     .map_err(|_| Command::Error("Cannot read file".into()))?;
-                let (result, _) = execute_program(program)
+                let (result, _) = execute_program(program, new_cwd)
                     .map_err(|e| Command::Error(RuntimeError(e.to_string())))?;
                 Ok(result)
             } else {
