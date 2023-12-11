@@ -1,6 +1,12 @@
 use std::{collections::HashMap, fs};
 
-use crate::{executor::Command, parser::Expression, scope::Scope, variables::VariableValue};
+use crate::{
+    errors::RuntimeError,
+    executor::{execute_program, Command},
+    parser::Expression,
+    scope::Scope,
+    variables::VariableValue,
+};
 
 pub fn exec_builtin(
     scope: &mut Scope,
@@ -92,6 +98,21 @@ pub fn exec_builtin(
                 Err(Command::Error("target is not a string".into()))
             }
         }
+        "import" => {
+            if params.len() != 1 {
+                Err(Command::Error(
+                    "Invalid parameter amount for function 'import'".into(),
+                ))
+            } else if let Some(VariableValue::String(val)) = params.get(0) {
+                let program = fs::read_to_string(val)
+                    .map_err(|_| Command::Error("Cannot read file".into()))?;
+                let (result, _) = execute_program(program)
+                    .map_err(|e| Command::Error(RuntimeError(e.to_string())))?;
+                Ok(result)
+            } else {
+                Err(Command::Error("Param is not a string".into()))
+            }
+        }
         "list" => {
             if params.len() != 1 {
                 Err(Command::Error(
@@ -122,7 +143,9 @@ pub fn exec_builtin(
                                 {
                                     Ok((var_name.to_string(), val.clone()))
                                 } else {
-                                    Err(Command::Error("Cannot construct an object without String Keys".into()))
+                                    Err(Command::Error(
+                                        "Cannot construct an object without String Keys".into(),
+                                    ))
                                 }
                             } else {
                                 Err(Command::Error("".into()))
@@ -250,6 +273,7 @@ pub fn is_builtin(name: &str, target: Option<&VariableValue>) -> Option<Variable
         (_, "read") => true,
         (_, "lines") => true,
         (_, "range") => true,
+        (_, "import") => true,
         (Some(VariableValue::String(_)), "split") => true,
         (Some(VariableValue::String(_)), "map") => true,
         (Some(VariableValue::List(_)), "map") => true,

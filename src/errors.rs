@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 
 #[derive(Debug)]
 pub struct RuntimeError(pub String);
@@ -14,6 +14,16 @@ pub enum Error {
     C(ClientError),
     S(SyntaxError),
     R(RuntimeError),
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Error::C(c) => &c.0,
+            Error::S(c) => &c.0,
+            Error::R(c) => &c.0,
+        })
+    }
 }
 
 impl<T> From<T> for SyntaxError

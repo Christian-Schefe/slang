@@ -1,19 +1,2 @@
-let bc = |_| {
-    let a = 5;
-    let ac = |_| {
-        let y = a;
-    };
-    ac
-};
-
-let a = 3;
-bc()();
-
-for i in range(3, 100000) {
-    bc()();
-};
-print(i);
-i = 0;
-while i < 4 {
-};
-print("4")
+let result = import("test.slang");
+print(result);

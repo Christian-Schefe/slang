@@ -32,19 +32,7 @@ fn main() {
 
 fn run() -> Result<(), Error> {
     let program = read_program_file()?;
-    let tokens = tokenize(&program)?;
-    let reduced = reduce_brackets_and_parenths(&tokens)?;
-    info!("reduced: {:?}", reduced);
-
-    let statements = get_statements(&reduced)?;
-    let mut scope = vec![HashMap::new()];
-    let result = exec_stmnts(&mut scope, &statements);
-    // info!("variables: {:?}", variables);
-
-    if let Err(Command::Error(e)) = result {
-        return Err(e.into());
-    }
-    Ok(())
+    execute_program(program).map(|_| ())
 }
 
 fn read_program_file() -> Result<String, ClientError> {
