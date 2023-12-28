@@ -97,18 +97,46 @@ impl Display for VariableValue {
 }
 
 impl VariableValue {
-    pub fn call(&self, params: Vec<VariableValue>) -> Result<VariableValue, RuntimeError> {
-        match self {
+    pub fn call(
+        &self,
+        scope: &mut Scope,
+        params: Vec<VariableValue>,
+    ) -> Result<VariableValue, Command> {
+        let result = match self {
             VariableValue::Function(args, body) => {
-                let mut variables = HashMap::new();
-                for (var, val) in args.iter().zip(params) {
-                    define_var_by_val(&mut variables, var, val)?;
+                enter_scope(scope);
+                for (var, val) in args.iter().zip(params.iter()) {
+                    define_var_by_val(scope, var, val.clone())?;
                 }
-                eval_expr(&mut variables, body)
+                define_var_by_val(scope, "self", self.clone())?;
+                match match *body.clone() {
+                    Expression::BuiltinFunctionCall(name, target, _) => {
+                        let new_body = Expression::BuiltinFunctionCall(name, target, params);
+                        eval_expr(scope, &new_body)
+                    }
+                    any_body => eval_expr(scope, &any_body),
+                } {
+                    Ok(val) => Ok(val),
+                    Err(command) => match command {
+                        Command::Return(val) => Ok(val),
+                        Command::Continue => {
+                            Err(Command::Error("continue can't go outside function".into()))
+                        }
+                        Command::Break(_) => {
+                            Err(Command::Error("break can't go outside function".into()))
+                        }
+                        Command::Error(e) => Err(Command::Error(e)),
+                    },
+                }
             }
-            _ => Err(format!("variable {} is not callable", self).into()),
-        }
+            _ => Err(Command::Error(
+                format!("variable {} is not callable", self).into(),
+            )),
+        };
+        exit_scope(scope);
+        result
     }
+
     pub fn get_type(&self) -> String {
         match self {
             VariableValue::Boolean(_) => "Boolean",
@@ -313,11 +341,14 @@ pub fn evaluate_binary_op(
     }
 }
 
-pub fn evaluate_unary_op(a: VariableValue, op: Operator) -> Result<VariableValue, RuntimeError> {
+pub fn evaluate_unary_op(a: VariableValue, op: Operator) -> Result<VariableValue, Command> {
     match op {
-        Operator::Not => VariableValue::not(a),
-        Operator::Negate => VariableValue::negate(a),
-        Operator::UnaryPlus => VariableValue::unary_plus(a),
-        _ => Err(RuntimeError(format!("{:?} is not a unary operator!", op))),
+        Operator::Not => VariableValue::not(a).map_err(|v| Command::Error(v)),
+        Operator::Negate => VariableValue::negate(a).map_err(|v| Command::Error(v)),
+        Operator::UnaryPlus => VariableValue::unary_plus(a).map_err(|v| Command::Error(v)),
+        _ => Err(Command::Error(RuntimeError(format!(
+            "{:?} is not a unary operator!",
+            op
+        )))),
     }
 }

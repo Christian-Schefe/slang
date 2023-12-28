@@ -45,12 +45,14 @@ impl Display for Token {
             Token::Ampersand => "&".to_string(),
             Token::VerticalBar => "|".to_string(),
             Token::Identifier(s) => s.to_string(),
-            Token::Keyword(Keyword::Fn) => "fn".to_string(),
             Token::Keyword(Keyword::Let) => "let".to_string(),
             Token::Keyword(Keyword::Return) => "return".to_string(),
+            Token::Keyword(Keyword::Break) => "break".to_string(),
+            Token::Keyword(Keyword::Continue) => "continue".to_string(),
             Token::Keyword(Keyword::While) => "while".to_string(),
             Token::Keyword(Keyword::For) => "for".to_string(),
             Token::Keyword(Keyword::If) => "if".to_string(),
+            Token::Keyword(Keyword::In) => "in".to_string(),
             Token::Keyword(Keyword::Else) => "else".to_string(),
             Token::Value(v) => v.to_string(),
             Token::Semicolon => ";".to_string(),
@@ -82,9 +84,11 @@ pub enum Keyword {
     While,
     For,
     Return,
-    Fn,
     If,
     Else,
+    In,
+    Break,
+    Continue,
 }
 
 #[derive(Debug, Clone)]
@@ -185,9 +189,9 @@ fn map_tokens(tokens: Vec<CharToken>) -> Result<Vec<Token>, SyntaxError> {
             CharToken::Char(c) => Some(map_char_token(c, x)),
             CharToken::Identifier(s) => Some(map_string_token(s)),
             CharToken::String(s) => {
-                let unescaped_s = unescape(&s).map_err(|e| SyntaxError(format!("couldn't unescape '{}': {}", s, e)));
-                let return_val =
-                    unescaped_s.map(|rs| Token::Value(VariableValue::String(rs)));
+                let unescaped_s = unescape(&s)
+                    .map_err(|e| SyntaxError(format!("couldn't unescape '{}': {}", s, e)));
+                let return_val = unescaped_s.map(|rs| Token::Value(VariableValue::String(rs)));
                 Some(return_val)
             }
         })
@@ -235,8 +239,10 @@ fn map_string_token(s: String) -> Result<Token, SyntaxError> {
         "while" => Ok(Token::Keyword(Keyword::While)),
         "for" => Ok(Token::Keyword(Keyword::For)),
         "return" => Ok(Token::Keyword(Keyword::Return)),
-        "fn" => Ok(Token::Keyword(Keyword::Fn)),
+        "break" => Ok(Token::Keyword(Keyword::Break)),
+        "continue" => Ok(Token::Keyword(Keyword::Continue)),
         "if" => Ok(Token::Keyword(Keyword::If)),
+        "in" => Ok(Token::Keyword(Keyword::In)),
         "else" => Ok(Token::Keyword(Keyword::Else)),
         "true" => Ok(Token::Value(VariableValue::Boolean(true))),
         "false" => Ok(Token::Value(VariableValue::Boolean(false))),

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use log::info;
+use log::{debug, info};
 
 use crate::{
     errors::SyntaxError,
@@ -14,6 +14,9 @@ pub enum Statement {
     VariableAssignment(ReferenceExpr, Expression),
     Expr(Expression),
     Return(Expression),
+    Break(Expression),
+    Continue,
+    ImplicitReturn(Expression),
 }
 
 #[derive(Debug, Clone)]
@@ -26,7 +29,10 @@ pub enum Expression {
     UnaryOperator(Box<Expression>, Operator),
     Block(Vec<Statement>),
     FunctionCall(Box<Expression>, Vec<Expression>),
-    IfElse(Box<Expression>, Box<Expression>, Box<Expression>),
+    BuiltinFunctionCall(String, Option<VariableValue>, Vec<VariableValue>),
+    IfElse(Box<Expression>, Box<Expression>, Option<Box<Expression>>),
+    ForLoop(String, Box<Expression>, Box<Expression>),
+    WhileLoop(Box<Expression>, Box<Expression>),
 }
 
 #[derive(Debug, Clone)]
@@ -118,13 +124,17 @@ pub fn get_statements(t: &[PartialParsed]) -> Result<Vec<Statement>, SyntaxError
         }
     }
 
+    if let Some(PartialParsed::Token(Token::Semicolon)) = t.last() {
+        return Ok(statements);
+    }
+
     if let Some(last_stmnt) = statements.last_mut() {
         if let Statement::Expr(ref last_expr) = last_stmnt {
-            *last_stmnt = Statement::Return(last_expr.clone());
+            *last_stmnt = Statement::ImplicitReturn(last_expr.clone());
         }
         Ok(statements)
     } else {
-        Err("empty block (this error shouldn't be able to occur!)".into())
+        Err("empty block!".into())
     }
 }
 
@@ -143,8 +153,29 @@ pub fn get_stmnt(t: &[PartialParsed]) -> Result<Statement, SyntaxError> {
     }
 
     if let Some(PartialParsed::Token(Token::Keyword(Keyword::Return))) = t.get(0) {
-        let expr = get_expr(&t[1..])?;
-        return Ok(Statement::Return(expr));
+        return if t.len() > 1 {
+            let expr = get_expr(&t[1..])?;
+            Ok(Statement::Return(expr))
+        } else {
+            Ok(Statement::Return(Expression::Value(VariableValue::Unit)))
+        };
+    }
+
+    if let Some(PartialParsed::Token(Token::Keyword(Keyword::Break))) = t.get(0) {
+        return if t.len() > 1 {
+            let expr = get_expr(&t[1..])?;
+            Ok(Statement::Break(expr))
+        } else {
+            Ok(Statement::Break(Expression::Value(VariableValue::Unit)))
+        };
+    }
+
+    if let Some(PartialParsed::Token(Token::Keyword(Keyword::Continue))) = t.get(0) {
+        return if t.len() > 1 {
+            Err(SyntaxError("invalid statement after continue".into()))
+        } else {
+            Ok(Statement::Continue)
+        };
     }
 
     if let Some(i) = t
@@ -160,10 +191,30 @@ pub fn get_stmnt(t: &[PartialParsed]) -> Result<Statement, SyntaxError> {
         }
     }
 
+    if let Some((i, op)) = t.iter().enumerate().find_map(|(i, tkn)| {
+        if let PartialParsed::Token(Token::OperatorAssign(op)) = tkn {
+            Some((i, op))
+        } else {
+            None
+        }
+    }) {
+        let expr = get_expr(&t[..i])?;
+        let val_expr = get_expr(&t[i + 1..])?;
+        if let Expression::Reference(ref ref_expr) = expr {
+            return Ok(Statement::VariableAssignment(
+                *ref_expr.clone(),
+                Expression::BinaryOperator(Box::new(expr), Box::new(val_expr), op.clone()),
+            ));
+        } else {
+            return Err("can only assign to a reference".into());
+        }
+    }
+
     get_expr(t).map(|e| Statement::Expr(e))
 }
 
 pub fn get_expr(t: &[PartialParsed]) -> Result<Expression, SyntaxError> {
+    debug!("get expr: {:?}", t);
     if t.len() == 0 {
         return Err("Empty expr".into());
     }
@@ -172,13 +223,22 @@ pub fn get_expr(t: &[PartialParsed]) -> Result<Expression, SyntaxError> {
             PartialParsed::Braces(ref b) => {
                 if b.len() == 0 {
                     Ok(Expression::Value(VariableValue::Object(HashMap::new())))
+                } else if b
+                    .iter()
+                    .any(|v| matches!(v, PartialParsed::Token(Token::Colon)))
+                {
+                    get_object(b)
                 } else {
-                    get_statements(b)
-                        .map(|v| Expression::Block(v))
-                        .or_else(|_| get_object(b))
+                    get_statements(b).map(|v| Expression::Block(v))
                 }
             }
-            PartialParsed::Parentheses(ref b) => get_expr(b),
+            PartialParsed::Parentheses(ref b) => {
+                if b.len() == 0 {
+                    Ok(Expression::Value(VariableValue::Unit))
+                } else {
+                    get_expr(b)
+                }
+            }
             PartialParsed::Brackets(ref b) => if b.len() > 0 {
                 get_comma_separated_exprs(b)
             } else {
@@ -210,24 +270,110 @@ pub fn get_expr(t: &[PartialParsed]) -> Result<Expression, SyntaxError> {
         }
     }
 
+    let is_for_loop = t
+        .iter()
+        .any(|tkn| matches!(tkn, PartialParsed::Token(Token::Keyword(Keyword::For))));
+    if is_for_loop {
+        if let (
+            Some(PartialParsed::Token(Token::Keyword(Keyword::For))),
+            Some(PartialParsed::Token(Token::Identifier(var_name))),
+            Some(PartialParsed::Token(Token::Keyword(Keyword::In))),
+        ) = (t.get(0), t.get(1), t.get(2))
+        {
+            if t.len() < 5 {
+                return Err(format!("invalid for loop: {:?}", t).into());
+            }
+            let iterator = get_expr(&t[3..t.len() - 1])?;
+            let body_expr = get_expr(&t[t.len() - 1..])?;
+            return match body_expr {
+                Expression::Block(body) => Ok(Expression::ForLoop(
+                    var_name.to_string(),
+                    Box::new(iterator),
+                    Box::new(Expression::Block(body)),
+                )),
+                Expression::Value(VariableValue::Object(map)) if map.len() == 0 => {
+                    Ok(Expression::ForLoop(
+                        var_name.to_string(),
+                        Box::new(iterator),
+                        Box::new(Expression::Block(Vec::new())),
+                    ))
+                }
+                _ => Err(format!("invalid for loop body: {:?}", t).into()),
+            };
+        } else {
+            return Err(format!("invalid for loop: {:?}", t).into());
+        }
+    }
+
+    let is_while_loop = t
+        .iter()
+        .any(|tkn| matches!(tkn, PartialParsed::Token(Token::Keyword(Keyword::While))));
+    if is_while_loop {
+        if let Some(PartialParsed::Token(Token::Keyword(Keyword::While))) = t.get(0) {
+            if t.len() < 3 {
+                return Err(format!("invalid while loop: {:?}", t).into());
+            }
+            let condition = get_expr(&t[1..t.len() - 1])?;
+            let body_expr = get_expr(&t[t.len() - 1..])?;
+            return match body_expr {
+                Expression::Block(body) => Ok(Expression::WhileLoop(
+                    Box::new(condition),
+                    Box::new(Expression::Block(body)),
+                )),
+                Expression::Value(VariableValue::Object(map)) if map.len() == 0 => {
+                    Ok(Expression::WhileLoop(
+                        Box::new(condition),
+                        Box::new(Expression::Block(Vec::new())),
+                    ))
+                }
+                _ => Err(format!("invalid while loop body: {:?}", t).into()),
+            };
+        } else {
+            return Err(format!("invalid while loop: {:?}", t).into());
+        }
+    }
+
     let if_pos = t
         .iter()
         .position(|tkn| matches!(tkn, PartialParsed::Token(Token::Keyword(Keyword::If))));
     if let Some(if_i) = if_pos {
-        let else_pos = t
+        if let Some(else_pos) = t
             .iter()
             .position(|tkn| matches!(tkn, PartialParsed::Token(Token::Keyword(Keyword::Else))))
-            .ok_or(SyntaxError::from("Not a valid if else"))?;
+        {
+            if t.len() < 5 {
+                return Err(format!("invalid if statement: {:?}", t).into());
+            }
+            let cond = get_expr(&t[if_i + 1..else_pos - 1])?;
 
-        let e1 = get_expr(&t[..if_i])?;
-        let cond = get_expr(&t[if_i + 1..else_pos])?;
-        let e2 = get_expr(&t[else_pos + 1..])?;
+            if let (Expression::Block(e1), Expression::Block(e2)) = (
+                get_expr(&t[else_pos - 1..else_pos])?,
+                get_expr(&t[else_pos + 1..else_pos + 2])?,
+            ) {
+                return Ok(Expression::IfElse(
+                    Box::new(cond),
+                    Box::new(Expression::Block(e1)),
+                    Some(Box::new(Expression::Block(e2))),
+                ));
+            } else {
+                return Err(format!("invalid if else body: {:?}", t).into());
+            }
+        } else {
+            if t.len() < 3 {
+                return Err(format!("invalid if statement: {:?}", t).into());
+            }
+            let cond = get_expr(&t[if_i + 1..t.len() - 1])?;
 
-        return Ok(Expression::IfElse(
-            Box::new(cond),
-            Box::new(e1),
-            Box::new(e2),
-        ));
+            if let Expression::Block(e1) = get_expr(&t[t.len() - 1..])? {
+                return Ok(Expression::IfElse(
+                    Box::new(cond),
+                    Box::new(Expression::Block(e1)),
+                    None,
+                ));
+            } else {
+                return Err(format!("invalid if body: {:?}", t).into());
+            }
+        }
     }
 
     let mut lowest_op = None;
@@ -293,7 +439,7 @@ pub fn get_expr(t: &[PartialParsed]) -> Result<Expression, SyntaxError> {
         ))));
     }
 
-    Err(format!("Not a valid expr {:?}", t).into())
+    Err(format!("Not a valid expr: {:?}. Are you missing a semicolon?", t).into())
 }
 
 pub fn get_object(t: &[PartialParsed]) -> Result<Expression, SyntaxError> {
