@@ -127,6 +127,24 @@ pub fn exec_builtin(
                 Err(Command::Error("Param is not a string".into()))
             }
         }
+        "exec" => {
+            if params.len() != 1 {
+                Err(Command::Error(
+                    "Invalid parameter amount for function 'exec'".into(),
+                ))
+            } else if let Some(VariableValue::String(val)) = params.get(0) {
+                let cwd_str = get_var_from_scope_cloned(scope, "cwd").and_then(|v| match v {
+                    VariableValue::String(s) => Ok(s),
+                    _ => Err(Command::Error("".into())),
+                })?;
+                let program = val.to_string();
+                let (result, _) = execute_program(program, cwd_str)
+                    .map_err(|e| Command::Error(RuntimeError(e.to_string())))?;
+                Ok(result)
+            } else {
+                Err(Command::Error("Param is not a string".into()))
+            }
+        }
         "list" => {
             if params.len() != 1 {
                 Err(Command::Error(
@@ -288,6 +306,7 @@ pub fn is_builtin(name: &str, target: Option<&VariableValue>) -> Option<Variable
         (_, "lines") => true,
         (_, "range") => true,
         (_, "import") => true,
+        (_, "exec") => true,
         (Some(VariableValue::String(_)), "split") => true,
         (Some(VariableValue::String(_)), "map") => true,
         (Some(VariableValue::List(_)), "map") => true,
