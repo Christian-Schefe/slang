@@ -160,6 +160,23 @@ pub fn exec_builtin(
                 Err(Command::Error("Cannot convert to list".into()))
             }
         }
+        "concat" => {
+            if let Some(VariableValue::List(l)) = target {
+                if params.len() != 1 {
+                    Err(Command::Error(
+                        "Invalid parameter amount for function 'list'".into(),
+                    ))
+                } else if let Some(VariableValue::List(li)) = params.get(0) {
+                    let mut new_l: Vec<VariableValue> = l.clone();
+                    new_l.extend(li.clone());
+                    Ok(VariableValue::List(new_l))
+                } else {
+                    Err(Command::Error("Cannot concat el to list".into()))
+                }
+            } else {
+                Err(Command::Error("Cannot concat to list".into()))
+            }
+        }
         "obj" => {
             if params.len() != 1 {
                 Err(Command::Error(
@@ -316,6 +333,7 @@ pub fn is_builtin(name: &str, target: Option<&VariableValue>) -> Option<Variable
         (Some(VariableValue::Object(_)), "filter") => true,
         (Some(VariableValue::String(_)), "len") => true,
         (Some(VariableValue::List(_)), "len") => true,
+        (Some(VariableValue::List(_)), "concat") => true,
         (Some(VariableValue::Object(_)), "len") => true,
         (_, _) => false,
     } {

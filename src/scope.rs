@@ -57,5 +57,5 @@ pub fn assign_var_in_scope(
         .rev()
         .find_map(|map| map.get_mut(var_name))
         .map(|v| *v = val)
-        .ok_or(Command::Error("".into()))
+        .ok_or(Command::Error(format!("variable '{}' is not defined", var_name).into()))
 }
